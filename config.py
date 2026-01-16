@@ -1,0 +1,27 @@
+WEB3_HTTP_PROVIDER = 'https://bsc-dataseed.binance.org/'
+ANKR_RPC_URL = "https://rpc.ankr.com/bsc/e1742d0ef375c7aaea14e37dc62551a3ab497cacde500e73382b5e3d9bb801b3"
+NODEREAL_RPC_URL = 'https://bsc-mainnet.nodereal.io/v1/0d1c1bcb6f8440eb8f159ff5837c819c'
+NODEREAL_WSS_URI = 'wss://bsc-mainnet.nodereal.io/ws/v1/0d1c1bcb6f8440eb8f159ff5837c819c'
+ALCHEMY_BSC_WSS_URI = 'wss://bnb-mainnet.g.alchemy.com/v2/FuLG4La49rlhyWgrZlSDI'
+BSC_WSS_URI = "wss://bsc-rpc.publicnode.com"
+BINANCE_PRICE_WSS_URI = "wss://stream.binance.com:9443/stream?streams="
+
+VENUS_CORE_COMPTROLLER_ADDR = "0xfd36e2c2a6789db23113685031d7f16329158384"
+# 常见的隔离池 (Isolated Pools)
+# 如果你想横扫全网，这些池子也需要监控，但每个池子都有独立的 Comptroller address
+VENUS_LIQUID_STAKING_POOL = "0xd3c796628d6ba796604be2d1323e2974578b87a3"
+VENUS_DEFI_POOL = "0x0815774301f6c17696685799971feda385a217b1"
+VENUS_TRON_POOL = "0x2437bbd17fc127394830745ccee6539c70622114"
+VENUS_GAMEFI_POOL = "0x1b4352e82531980309907171b96b447a55e90aec"
+VENUS_REGISTRY_POOL = '0x9f77609477ac0dc2eccc67673059a97d953e6916'
+
+TOPICS = {
+    "MarketEntered": "0x8625b3944d1f39bf456a3b870100d063edcd40295823713830c4ae95a92bbaef", # "0x3ab23ab0d51cccc0c3085aec51f99228625aa1a922b3a8ca89a26b0f2027a1a5",
+    "Borrow": "0x13ed6866d4e1ee6da46f845c46d7e54120883d75c5ea9a2dacc1c4ca8984ab80",
+    # "Mint": "0x4c209b5fc8ad50758f13e2e1088ba56a560dff690a1c6fef26394f4c03821c4f",
+    "Redeem": "0xe5b754fb1abb7f01b499791d0b820ae3b6af3424ac1c59768edb53f4ec31a929",
+    "LiquidateBorrow": "0x298637f684da70674f26509b10f07ec2fbc77a335ab1e7d6215a4b2484d8bb52",
+    "RepayBorrow": "0x1a2a22cb034d26d1854bdc6666a5b91fe25efbbb5dcad3b0355478d6f5c362a1",
+    # "Transfer": "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+    # "PriceUpdated": "0xb556fac599c3c70efb9ab1fa725ecace6c81cc48d1455f886607def065f3e0c0"
+}
