@@ -156,17 +156,21 @@ class Run:
 
     async def listen_binance_price_updates(self):
         streams = "/".join([f"{t.lower()}usdt@aggTrade" for t in self._db.get_all_symbols()])
-        async with websockets.connect(config.BINANCE_PRICE_WSS_URI + streams) as ws:
-            self.Log.info("--- 等待实时 binance 价格更新事件推送 ---")
-            while True:
-                message = json.loads(await ws.recv())
-                data = message['data']
-                self.Log.debug(f"💴 代币: {data['s']} | 价格: {data['p']}"
-                      f" | 更新时间: {datetime.fromtimestamp(float(data['E']) / 1000).strftime('%Y-%m-%d %H:%M:%S')}")
-                symbol = data['s'].replace('USDT', '')
-                vtoken_addr = self._db.get_vtoken('symbol_map', symbol)
-                self._binance_price[vtoken_addr] = price_to_wei(data['p'])
-                asyncio.create_task(self._check_opportunity(vtoken_addr))
+        while True:
+            try:
+                async with websockets.connect(config.BINANCE_PRICE_WSS_URI + streams) as ws:
+                    self.Log.info("--- 等待实时 binance 价格更新事件推送 ---")
+                    while True:
+                        message = json.loads(await ws.recv())
+                        data = message['data']
+                        self.Log.debug(f"💴 代币: {data['s']} | 价格: {data['p']}"
+                              f" | 更新时间: {datetime.fromtimestamp(float(data['E']) / 1000).strftime('%Y-%m-%d %H:%M:%S')}")
+                        symbol = data['s'].replace('USDT', '')
+                        vtoken_addr = self._db.get_vtoken('symbol_map', symbol)
+                        self._binance_price[vtoken_addr] = price_to_wei(data['p'])
+                        asyncio.create_task(self._check_opportunity(vtoken_addr))
+            except Exception as e:
+                self.Log.info(f"发生异常: {e}, 正在重新连接...")
 
     async def main(self):
         await asyncio.gather(

@@ -9,7 +9,7 @@ def get_realtime_price(symbol):
     try:
         price = float(requests.get(url).json()['price'])
         return price
-    except Exception:
+    except Exception as e:
         return None
 
 def get_realtime_prices():
@@ -20,7 +20,7 @@ def get_realtime_prices():
     try:
         prices = requests.get(url).json()
         return prices
-    except Exception:
+    except Exception as e:
         return None
 
 def get_binance_symbols() -> list:
