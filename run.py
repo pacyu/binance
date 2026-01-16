@@ -147,7 +147,6 @@ class Run:
                     self.Log.info(f"成功订阅全网 Borrow/Redeem/RepayBorrow/LiquidateBorrow/MarketEntered 事件, SubID: {msg['result']}")
                     while True:
                         message = json.loads(await web3.recv())
-                        self.Log.info(message)
                         if "params" in message and "result" in message["params"]:
                             log = message["params"]["result"]
                             user_addr = self._process_events_log(log)
