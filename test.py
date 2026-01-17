@@ -27,7 +27,7 @@ async def test_analyzer():
                 price[token['address']] = price_to_wei(item['price'])
     token = json.loads(redis_client.get_vtoken('venus:assets:symbol', 'USDT'))
     price[token['address']] = 1
-    report = await analyzer.analyze_user('0x76edb2236c9b58e45ab0b4bc5c462f6f1e52827d', price)
+    report = await analyzer.analyze_user('0x73efd06f9098386e27b2bd299b95d7a99e37091b', price)
     print(report)
 
 if __name__ == "__main__":

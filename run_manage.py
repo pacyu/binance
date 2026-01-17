@@ -5,6 +5,7 @@ from web3client import VenusClient
 from redis_client import RedisClient
 from analyzer import Analyzer
 from utils import get_binance_symbols
+from logger import Logger
 
 def sync_users():
     days = 90  # 3个月
@@ -31,7 +32,7 @@ def sync_token():
 if __name__ == "__main__":
     w3client = VenusClient(config.ANKR_RPC_URL, config.VENUS_CORE_COMPTROLLER_ADDR)
     redis_db = RedisClient()
-    analyzer = Analyzer(w3client, redis_db)
+    analyzer = Analyzer(w3client, redis_db, Logger()())
     manager = DataManager(w3client, redis_db, analyzer)
 
     sync_users_profile()

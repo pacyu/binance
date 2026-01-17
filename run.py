@@ -76,20 +76,20 @@ class Run:
             user_addr = decoded['args']['redeemer']
             redeem_amount = decoded['args']['redeemAmount'] / 1e18
             redeem_tokens = decoded['args']['redeemTokens'] / 1e18
-            self.Log.debug(f"🔥 检测到用户赎回事件! 合约地址: {vtoken_addr} | 赎回者: {user_addr}"
+            self.Log.info(f"🔥 检测到用户赎回事件! 合约地址: {vtoken_addr} | 赎回者: {user_addr}"
                            f" | 赎回资产数量: {redeem_amount} | 销毁vToken数量: {redeem_tokens}"
                            f" | transactionHash: {log['transactionHash']}")
 
         elif topic == config.TOPICS['RepayBorrow']:
             repay_borrow_event = self.event.RepayBorrow()
             decoded = repay_borrow_event.process_log(log)
-            user_addr = decoded['args']['payer']
-            borrower_addr = decoded['args']['borrower']
+            payer_addr = decoded['args']['payer']
+            user_addr = decoded['args']['borrower']
             repay_amount = decoded['args']['repayAmount'] / 1e18
             account_borrows_new = decoded['args']['accountBorrowsNew'] / 1e18
             total_borrows_new = decoded['args']['totalBorrowsNew'] / 1e18
-            self.Log.debug(f"🔥 检测到用户还款事件! 合约地址: {vtoken_addr} | 还款人: {user_addr}"
-                           f" | 借款人: {borrower_addr} | 还款金额: {repay_amount}"
+            self.Log.info(f"🔥 检测到用户还款事件! 合约地址: {vtoken_addr} | 还款人: {payer_addr}"
+                           f" | 借款人: {user_addr} | 还款金额: {repay_amount}"
                            f" | 借款人新债务: {account_borrows_new}"
                            f" | 市场总债务新值: {total_borrows_new}"
                            f" | transactionHash: {log['transactionHash']}")
@@ -97,13 +97,13 @@ class Run:
         elif topic == config.TOPICS['LiquidateBorrow']:
             liquidate_borrow_event = self.event.LiquidateBorrow()
             decoded = liquidate_borrow_event.process_log(log)
-            user_addr = decoded['args']['liquidator']
-            borrower_addr = decoded['args']['borrower']
+            liquidator_addr = decoded['args']['liquidator']
+            user_addr = decoded['args']['borrower']
             repay_amount = decoded['args']['repayAmount'] / 1e18
             vtoken_collateral_addr = decoded['args']['vTokenCollateral']
             seize_tokens = decoded['args']['seizeTokens'] / 1e18
-            self.Log.info(f"🔥 检测到用户清算事件! 合约地址: {vtoken_addr} | 清算者: {user_addr}"
-                          f" | 被清算的借款人: {borrower_addr} | 偿还的债务金额: {repay_amount}"
+            self.Log.info(f"🔥 检测到用户清算事件! 合约地址: {vtoken_addr} | 清算者: {liquidator_addr}"
+                          f" | 被清算的借款人: {user_addr} | 偿还的债务金额: {repay_amount}"
                           f" | 抵押品vToken地址: {vtoken_collateral_addr}"
                           f" | 清算者获得的抵押品vToken数量: {seize_tokens}"
                           f" | transactionHash: {log['transactionHash']}")
