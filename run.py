@@ -99,7 +99,7 @@ class Run:
             repay_amount = decoded['args']['repayAmount'] / 1e18
             vtoken_collateral_addr = decoded['args']['vTokenCollateral']
             seize_tokens = decoded['args']['seizeTokens'] / 1e18
-            self.Log.debug(f"🔥 检测到用户清算事件! 合约地址: {vtoken_addr} | 清算者: {user_addr}"
+            self.Log.info(f"🔥 检测到用户清算事件! 合约地址: {vtoken_addr} | 清算者: {user_addr}"
                           f" | 被清算的借款人: {borrower_addr} | 偿还的债务金额: {repay_amount}"
                           f" | 抵押品vToken地址: {vtoken_collateral_addr}"
                           f" | 清算者获得的抵押品vToken数量: {seize_tokens}")
