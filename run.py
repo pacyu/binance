@@ -157,7 +157,7 @@ class Run:
                                 user_addr = self._process_events_log(log)
                                 asyncio.create_task(self._process_and_analyze(user_addr))
                         except LogTopicError as e:
-                            self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}")
+                            self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}, 日志: {log}")
             except ConnectionClosedError as e:
                 self.Log.error(f"监听事件-发生异常: {e}, 异常类型: {type(e)}, 正在重新连接...")
                 await asyncio.sleep(config.RETRY_DELAY)

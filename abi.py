@@ -137,7 +137,7 @@ event_abi = [
 },{
     "anonymous": False,
     'inputs': [
-        {'type': 'address', 'name': 'redeemer', 'indexed': False},
+        {'type': 'address', 'name': 'redeemer', 'indexed': True},
         {'type': 'uint256', 'name': 'redeemAmount', 'indexed': False}, # 取回的底层资产数量
         {'type': 'uint256', 'name': 'redeemTokens', 'indexed': False}, # 销毁的vToken数量
     ],
