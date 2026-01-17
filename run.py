@@ -42,10 +42,10 @@ class Run:
         topic = log['topics'][0]
 
         if topic == config.TOPICS['Borrow']:
-            if not self._db.vtoken_exists('venus:assets:v_addr', vtoken_addr.lower()):
-                token = self._client.get_vtoken(vtoken_addr.lower())
-                self._db.update_venus_vtoken('venus:assets:symbol', token['symbol'], json.dumps(token))
-                self._db.update_venus_vtoken('venus:assets:v_addr', vtoken_addr.lower(), json.dumps(token))
+            # if not self._db.vtoken_exists('venus:assets:v_addr', vtoken_addr.lower()):
+            #     token = self._client.get_vtoken(vtoken_addr.lower())
+            #     self._db.update_venus_vtoken('venus:assets:symbol', token['symbol'], json.dumps(token))
+            #     self._db.update_venus_vtoken('venus:assets:v_addr', vtoken_addr.lower(), json.dumps(token))
 
             borrow_event = self.event.Borrow()
             decoded = borrow_event.process_log(log)
@@ -146,20 +146,23 @@ class Run:
                     msg = json.loads(await web3.recv())
                     self.Log.info(f"成功订阅全网 Borrow/Redeem/RepayBorrow/LiquidateBorrow/MarketEntered 事件, SubID: {msg['result']}")
                     while True:
-                        message = json.loads(await web3.recv())
-                        if "params" in message and "result" in message["params"]:
-                            log = message["params"]["result"]
-                            user_addr = self._process_events_log(log)
-                            asyncio.create_task(self._process_and_analyze(user_addr))
+                        try:
+                            message = json.loads(await web3.recv())
+                            if "params" in message and "result" in message["params"]:
+                                log = message["params"]["result"]
+                                user_addr = self._process_events_log(log)
+                                asyncio.create_task(self._process_and_analyze(user_addr))
+                        except Exception as e:
+                            self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}")
             except Exception as e:
-                self.Log.info(f"发生异常: {e}, 正在重新连接...")
+                self.Log.error(f"监听事件-发生异常: {e}, 异常类型: {type(e)}, 正在重新连接...")
 
     async def listen_binance_price_updates(self):
         streams = "/".join([f"{t.lower()}usdt@aggTrade" for t in self._db.get_all_symbols()])
         while True:
             try:
                 async with websockets.connect(config.BINANCE_PRICE_WSS_URI + streams) as ws:
-                    self.Log.info("--- 等待实时 binance 价格更新事件推送 ---")
+                    self.Log.info("成功订阅实时 binance 价格更新事件推送")
                     while True:
                         message = json.loads(await ws.recv())
                         data = message['data']
@@ -170,7 +173,7 @@ class Run:
                         self._binance_price[vtoken_addr] = price_to_wei(data['p'])
                         asyncio.create_task(self._check_opportunity(vtoken_addr))
             except Exception as e:
-                self.Log.info(f"发生异常: {e}, 正在重新连接...")
+                self.Log.error(f"监听价格-发生异常: {e}, 异常类型: {type(e)}, 正在重新连接...")
 
     async def main(self):
         await asyncio.gather(

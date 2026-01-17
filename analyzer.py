@@ -30,7 +30,7 @@ class Analyzer:
             else:
                 total_debt_usd += abs(usd_price)
 
-        if total_debt_usd > 0.00001:
+        if total_debt_usd > 0:
             hf = total_collateral_usd / total_debt_usd
             return hf
         return float('inf')
