@@ -8,6 +8,8 @@ from web3client import VenusClient
 from analyzer import Analyzer
 from liquidator import Liquidator
 from redis_client import RedisClient
+from web3.exceptions import LogTopicError
+from websockets.exceptions import ConnectionClosedError
 from utils import price_to_wei, get_realtime_prices
 
 class Run:
@@ -22,12 +24,13 @@ class Run:
 
     def __call__(self):
         for item in get_realtime_prices():
-            if 'USDT' in item['symbol']:
+            if item['symbol'].endswith('USDT'):
                 symbol = item['symbol'].replace('USDT', '')
                 token = self._db.get_vtoken('venus:assets:symbol', symbol)
                 if token:
                     token = json.loads(token)
                     self._binance_price[token['address']] = price_to_wei(item['price'])
+        self._binance_price['0xfd5840cd36d94d7229439859c0112a4185bc0255'] = 1
         asyncio.run(self.main())
 
     async def _check_opportunity(self, vtoken_addr):
@@ -42,7 +45,8 @@ class Run:
         topic = log['topics'][0]
 
         if topic == config.TOPICS['Borrow']:
-            # if not self._db.vtoken_exists('venus:assets:v_addr', vtoken_addr.lower()):
+            # token = self._db.get_vtoken('venus:assets:v_addr', vtoken_addr.lower())
+            # if not token:
             #     token = self._client.get_vtoken(vtoken_addr.lower())
             #     self._db.update_venus_vtoken('venus:assets:symbol', token['symbol'], json.dumps(token))
             #     self._db.update_venus_vtoken('venus:assets:v_addr', vtoken_addr.lower(), json.dumps(token))
@@ -50,9 +54,9 @@ class Run:
             borrow_event = self.event.Borrow()
             decoded = borrow_event.process_log(log)
             user_addr = decoded['args']['borrower']
-            borrow_amount = decoded['args']['borrowAmount']
-            account_borrows = decoded['args']['accountBorrows']
-            total_borrows = decoded['args']['totalBorrows']
+            borrow_amount = decoded['args']['borrowAmount'] / 1e18
+            account_borrows = decoded['args']['accountBorrows'] / 1e18
+            total_borrows = decoded['args']['totalBorrows'] / 1e18
             self.Log.info(f"🔥 检测到用户借款事件! 合约地址: {vtoken_addr} | 借款人: {user_addr}"
                           f" | 借款金额: {borrow_amount} | 借款人总债务: {account_borrows}"
                           f" | 市场总债务: {total_borrows}")
@@ -70,8 +74,8 @@ class Run:
             redeem_event = self.event.Redeem()
             decoded = redeem_event.process_log(log)
             user_addr = decoded['args']['redeemer']
-            redeem_amount = decoded['args']['redeemAmount']
-            redeem_tokens = decoded['args']['redeemTokens']
+            redeem_amount = decoded['args']['redeemAmount'] / 1e18
+            redeem_tokens = decoded['args']['redeemTokens'] / 1e18
             self.Log.debug(f"🔥 检测到用户赎回事件! 合约地址: {vtoken_addr} | 赎回者: {user_addr}"
                           f" | 赎回资产数量: {redeem_amount} | 销毁vToken数量: {redeem_tokens}")
 
@@ -80,9 +84,9 @@ class Run:
             decoded = repay_borrow_event.process_log(log)
             user_addr = decoded['args']['payer']
             borrower_addr = decoded['args']['borrower']
-            repay_amount = decoded['args']['repayAmount']
-            account_borrows_new = decoded['args']['accountBorrowsNew']
-            total_borrows_new = decoded['args']['totalBorrowsNew']
+            repay_amount = decoded['args']['repayAmount'] / 1e18
+            account_borrows_new = decoded['args']['accountBorrowsNew'] / 1e18
+            total_borrows_new = decoded['args']['totalBorrowsNew'] / 1e18
             self.Log.debug(f"🔥 检测到用户还款事件! 合约地址: {vtoken_addr} | 还款人: {user_addr}"
                           f" | 借款人: {borrower_addr} | 还款金额: {repay_amount}"
                           f" | 借款人新债务: {account_borrows_new} | 市场总债务新值: {total_borrows_new}")
@@ -92,9 +96,9 @@ class Run:
             decoded = liquidate_borrow_event.process_log(log)
             user_addr = decoded['args']['liquidator']
             borrower_addr = decoded['args']['borrower']
-            repay_amount = decoded['args']['repayAmount']
+            repay_amount = decoded['args']['repayAmount'] / 1e18
             vtoken_collateral_addr = decoded['args']['vTokenCollateral']
-            seize_tokens = decoded['args']['seizeTokens']
+            seize_tokens = decoded['args']['seizeTokens'] / 1e18
             self.Log.debug(f"🔥 检测到用户清算事件! 合约地址: {vtoken_addr} | 清算者: {user_addr}"
                           f" | 被清算的借款人: {borrower_addr} | 偿还的债务金额: {repay_amount}"
                           f" | 抵押品vToken地址: {vtoken_collateral_addr}"
@@ -105,9 +109,9 @@ class Run:
             decoded = market_entered_event.process_log(log)
             user_addr = decoded['args']['user']
             market_addr = decoded['args']['market']
-            collateral_balance = decoded['args']['collateralBalance']
-            borrow_balance = decoded['args']['borrowBalance']
-            exchange_rate = decoded['args']['exchangeRate']
+            collateral_balance = decoded['args']['collateralBalance'] / 1e18
+            borrow_balance = decoded['args']['borrowBalance'] / 1e18
+            exchange_rate = decoded['args']['exchangeRate'] / 1e18
             self.Log.info(f"🔥 检测到用户抵押事件! 合约地址: {vtoken_addr} | 用户: {user_addr}"
                           f" | 市场地址: {market_addr} | 抵押品数量: {collateral_balance}"
                           f" | 借款数量: {borrow_balance} | 抵押品汇率: {exchange_rate}")
@@ -152,10 +156,11 @@ class Run:
                                 log = message["params"]["result"]
                                 user_addr = self._process_events_log(log)
                                 asyncio.create_task(self._process_and_analyze(user_addr))
-                        except Exception as e:
+                        except LogTopicError as e:
                             self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}")
-            except Exception as e:
+            except ConnectionClosedError as e:
                 self.Log.error(f"监听事件-发生异常: {e}, 异常类型: {type(e)}, 正在重新连接...")
+                await asyncio.sleep(config.RETRY_DELAY)
 
     async def listen_binance_price_updates(self):
         streams = "/".join([f"{t.lower()}usdt@aggTrade" for t in self._db.get_all_symbols()])
@@ -172,8 +177,9 @@ class Run:
                         vtoken_addr = self._db.get_vtoken('symbol_map', symbol)
                         self._binance_price[vtoken_addr] = price_to_wei(data['p'])
                         asyncio.create_task(self._check_opportunity(vtoken_addr))
-            except Exception as e:
+            except ConnectionClosedError as e:
                 self.Log.error(f"监听价格-发生异常: {e}, 异常类型: {type(e)}, 正在重新连接...")
+                await asyncio.sleep(config.RETRY_DELAY)
 
     async def main(self):
         await asyncio.gather(
