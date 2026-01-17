@@ -115,8 +115,8 @@ event_abi = [
 },{
     "anonymous": False,
     'inputs': [
-        {'type': 'address', 'name': 'payer', 'indexed': False}, # 实际支付还款的地址
-        {'type': 'address', 'name': 'borrower', 'indexed': False}, # 债务被偿还的借款人地址
+        {'type': 'address', 'name': 'payer', 'indexed': True}, # 实际支付还款的地址
+        {'type': 'address', 'name': 'borrower', 'indexed': True}, # 债务被偿还的借款人地址
         {'type': 'uint256', 'name': 'repayAmount', 'indexed': False}, # 偿还的底层资产数量
         {'type': 'uint256', 'name': 'accountBorrowsNew', 'indexed': False}, # 借款人新的借款余额
         {'type': 'uint256', 'name': 'totalBorrowsNew', 'indexed': False}, # 该市场新的总借款余额
@@ -126,10 +126,10 @@ event_abi = [
 },{
     "anonymous": False,
     'inputs': [
-        {'type': 'address', 'name': 'liquidator', 'indexed': False},
-        {'type': 'address', 'name': 'borrower', 'indexed': False},
+        {'type': 'address', 'name': 'liquidator', 'indexed': True},
+        {'type': 'address', 'name': 'borrower', 'indexed': True},
         {'type': 'uint256', 'name': 'repayAmount', 'indexed': False},
-        {'type': 'address', 'name': 'vTokenCollateral', 'indexed': False},
+        {'type': 'address', 'name': 'vTokenCollateral', 'indexed': True},
         {'type': 'uint256', 'name': 'seizeTokens', 'indexed': False},
     ],
     'name': 'LiquidateBorrow',
@@ -146,8 +146,8 @@ event_abi = [
 },{
     "anonymous": False,
     'inputs': [
-        {'type': 'address', 'name': 'user', 'indexed': False}, # 实际进入市场的用户账户
-        {'type': 'address', 'name': 'market', 'indexed': False}, # 进入的vToken市场地址
+        {'type': 'address', 'name': 'user', 'indexed': True}, # 实际进入市场的用户账户
+        {'type': 'address', 'name': 'market', 'indexed': True}, # 进入的vToken市场地址
         {'type': 'uint256', 'name': 'collateralBalance', 'indexed': False}, # 抵押品余额
         {'type': 'uint256', 'name': 'borrowBalance', 'indexed': False}, # 借款余额
         {'type': 'uint256', 'name': 'exchangeRate', 'indexed': False}, # 汇率
