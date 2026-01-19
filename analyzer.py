@@ -34,6 +34,7 @@ class Analyzer:
             hf = total_collateral_usd / total_debt_usd
             self.Log.info(f"用户健康度: {hf}")
             return hf
+        self.Log.info(f"用户健康度: inf")
         return float('inf')
 
     async def analyze_user(self, user_address, prices):
@@ -53,7 +54,7 @@ class Analyzer:
         report = {
             "user_address": user_address,
             "health_factor": hf,
-            "is_liquidatable": 1.0 <= hf <= 1.105,
+            "is_liquidatable": 1.0 <= hf < 1.105,
         }
         return report
 

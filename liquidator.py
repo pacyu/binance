@@ -17,7 +17,7 @@ class Liquidator:
         user_profile = await self.analyzer.get_user_snapshot(user_addr)
         prices = await self._client.get_oracle_price(list(user_profile.keys()))
         hf = self.analyzer.calculate_hf(user_profile, prices)
-        if 0.8 < hf <= 1.0:
+        if 0.9 < hf <= 1.0:
             incentive_rate = self._client.get_liquidation_incentive()
             liq = self.is_liquidation(user_profile, prices, incentive_rate)
             if liq['is_profitable']:
