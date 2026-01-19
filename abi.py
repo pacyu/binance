@@ -50,6 +50,15 @@ comptroller = [{
     "stateMutability": "view",
     "type": "function"
 }]
+exchange_rate_abi = [{
+    "constant":True,
+    "inputs":[],
+    "name":"exchangeRateStored",
+    "outputs":[{"internalType":"uint256","name":"","type":"uint256"}],
+    "payable":False,
+    "stateMutability":"view",
+    "type":"function"
+}]
 vtoken = [{
     "inputs": [{"internalType": "address", "name": "account", "type": "address"}],
     "name": "getAccountSnapshot",

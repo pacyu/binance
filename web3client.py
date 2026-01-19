@@ -129,6 +129,10 @@ class VenusClient:
         comp_contract = self.get_contract(config.VENUS_CORE_COMPTROLLER_ADDR, abi.comptroller)
         return comp_contract.functions.getAssetsIn(self.to_checksum_address(user_address)).call()
 
+    def get_exchange_rate(self, vtoken_address: str) -> float:
+        contract = self.get_contract(vtoken_address, abi.exchange_rate_abi)
+        return contract.functions.exchangeRateStored().call()
+
     def get_vtoken(self, v_addr: str) -> dict:
         """
         获取vToken的底层基本信息
@@ -158,7 +162,7 @@ class VenusClient:
 
         # 4. 从 Comptroller 获取抵押因子 (CF)
         # markets 返回值是一个元组，通常 index 1 是 collateralFactorMantissa
-        market_info = comp_contract.functions.markets(v_addr).call()
+        market_info = comp_contract.functions.markets(self.to_checksum_address(v_addr)).call()
         cf = market_info[1] / 1e18  # 转换为 0.825 这种格式
 
         # 5. 构建你的数据结构
@@ -192,7 +196,7 @@ class VenusClient:
 
         return await Multicall(calls, _w3=self._w3).coroutine()  # 返回 {vtoken_address: price}
 
-    def get_user_liquidity(self, user_address_list: List[str]) -> Dict[str, tuple]:
+    async def get_user_liquidity(self, user_address_list: List[str]) -> Dict[str, tuple]:
         """
         直接获取用户的清算缺口 (Shortfall)
 
@@ -200,11 +204,11 @@ class VenusClient:
         :return: { address: (error, liquidity, shortfall) }
         """
         signature = 'getAccountLiquidity(address)((uint256,uint256,uint256))'
-        calls = [Call(
-            self.comptroller_addr,
-            [signature, user_address],
-            [(user_address, lambda x: x)]) for user_address in user_address_list]
-        return Multicall(calls, _w3=self._w3, require_success=False)()
+        calls = [
+            Call(self.comptroller_addr,[signature, user_address],[(user_address, lambda x: x)])
+            for user_address in user_address_list
+        ]
+        return await Multicall(calls, _w3=self._w3).coroutine()
 
     def get_liquidation_incentive(self) -> float:
         """

@@ -14,21 +14,25 @@ from websockets_proxy import Proxy, proxy_connect
 
 async def test_analyzer():
     client = VenusClient(config.NODEREAL_RPC_URL, config.VENUS_CORE_COMPTROLLER_ADDR)
-    redis_client = RedisClient()
-    analyzer = Analyzer(client, redis_client, Logger()())
-    # hash = client.get_topic_hash('MarketedEntered(address,address,uint256,uint256,uint256)')
-    price = {}
-    for item in get_realtime_prices():
-        if item['symbol'].endswith('USDT'):
-            symbol = item['symbol'].replace('USDT', '')
-            token = redis_client.get_vtoken('venus:assets:symbol', symbol)
-            if token:
-                token = json.loads(token)
-                price[token['address']] = price_to_wei(item['price'])
-    token = json.loads(redis_client.get_vtoken('venus:assets:symbol', 'USDT'))
-    price[token['address']] = 1
-    report = await analyzer.analyze_user('0x73efd06f9098386e27b2bd299b95d7a99e37091b', price)
-    print(report)
+    # redis_client = RedisClient()
+    # https://api.pancakeswap.info/api/v2/tokens
+    er = client.get_exchange_rate('0xcc1db43a06d97f736c7b045aedd03c6707c09bdf')
+    print(er) # 10000000188260124213248795632
+    # analyzer = Analyzer(client, redis_client, Logger()())
+    # # hash = client.get_topic_hash('MarketedEntered(address,address,uint256,uint256,uint256)')
+    # price = {}
+    # for item in get_realtime_prices():
+    #     print(item)
+    #     if item['symbol'].endswith('USDT'):
+    #         symbol = item['symbol'].replace('USDT', '')
+    #         token = redis_client.get_vtoken('venus:assets:symbol', symbol)
+    #         if token:
+    #             token = json.loads(token)
+    #             price[token['address']] = price_to_wei(item['price'])
+    # token = json.loads(redis_client.get_vtoken('venus:assets:symbol', 'USDT'))
+    # price[token['address']] = 1
+    # report = await analyzer.analyze_user('0xd22ae40347c2e2a01c9faabefdf4e0a5246a25a2', price)
+    # print(report)
 
 if __name__ == "__main__":
     asyncio.run(test_analyzer())

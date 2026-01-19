@@ -65,6 +65,8 @@ def price_to_wei(price_str: str) -> int:
     return int(price_decimal * Decimal(10 ** 8))
 
 
-if __name__ == '__main__':
+# if __name__ == '__main__':
 #     print(get_binance_symbols())
-    print(get_realtime_prices())
+#     print(get_realtime_prices())
+#     r = requests.get('https://api.pancakeswap.info/api/v2/tokens/0xcc1db43a06d97f736c7b045aedd03c6707c09bdf')
+#     print(r.text)

@@ -40,7 +40,6 @@ class Analyzer:
         if not user_profile:
             user_profile = await self.get_user_snapshot(user_address)
             if not user_profile:
-                self.Log.debug(f"用户地址 {user_address} 在链上不存在！")
                 return {
                     "user_address": '',
                     "health_factor": 0,
@@ -111,8 +110,8 @@ class Analyzer:
             self._db.update_user_asset_map_list(f'asset:users:{v_addr}', user_addr)
         return user_profile
 
-    def analyze_liq_by_users(self, user_addresses):
-        results = self._client.get_users_liquidity(user_addresses)
+    def analyze_liquidable_users(self, user_address_list):
+        results = self._client.get_user_liquidity(user_address_list)
         for user_address, (error, liquidity, shortfall) in results.items():
             shortfall_usd = shortfall / 10 ** 18
             liq_usd = liquidity / 10 ** 18
@@ -122,7 +121,7 @@ class Analyzer:
             #     self._db.set(f"target:{user_address}", shortfall_usd)
             elif liq_usd < 500:  # 账户剩余额度不足 500 USD
                 self.Log.info(f"⚠️ [高风险] 用户: {user_address} | 剩余额度: ${liq_usd:.2f}")
-            #     # self._db.update_user_profile(f'user_profile:{user_address}', item)
+            #     self._db.set(f'user_profile:{user_address}', item)
             else:
                 self.Log.info(f"✅ [安全] 用户: {user_address} | 剩余额度: ${liq_usd:.2f}")
             #     self._db.set(f"liquidity:{user_address}", liq_usd)
