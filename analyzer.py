@@ -13,7 +13,7 @@ class Analyzer:
     def calculate_hf(self, user_profile, prices):
         total_collateral_usd = 0
         total_debt_usd = 0
-
+        self.Log.info(user_profile)
         # 从用户持仓细节中提取资产并乘以 prices 里的实时价
         for v_addr, amount in user_profile.items():
             if not prices.get(v_addr):
@@ -32,6 +32,7 @@ class Analyzer:
 
         if total_debt_usd > 0:
             hf = total_collateral_usd / total_debt_usd
+            self.Log.info(hf)
             return hf
         return float('inf')
 

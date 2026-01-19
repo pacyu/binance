@@ -30,6 +30,7 @@ class Run:
                 if token:
                     token = json.loads(token)
                     self._binance_price[token['address']] = price_to_wei(item['price'])
+        self._binance_price['0xfd5840cd36d94d7229439859c0112a4185bc0255'] = 1e8
         asyncio.run(self.main())
 
     async def _check_opportunity(self, vtoken_addr):
@@ -128,12 +129,12 @@ class Run:
 
     async def poll_risk_check(self):
         while True:
-            user_address_list = self._db.get_user_hf_by_score(f'high_risk_queue', 0, 1.1)
+            user_address_list = self._db.get_user_hf_by_score(f'high_risk_queue', 0, 1.2)
             for user_addr in user_address_list:
                 risky_report = await self.analyzer.analyze_user(user_addr, self._binance_price)
                 if risky_report['is_liquidatable']:
                     asyncio.create_task(self.engine.handle_liquidation(risky_report))
-                if risky_report['health_factor'] > 1.1 or risky_report['health_factor'] < 0.6:
+                if risky_report['health_factor'] > 1.2 or risky_report['health_factor'] < 0.6:
                     self._db.remove_user_hf_from_high_risk('high_risk_queue', user_addr)
             await asyncio.sleep(3)
 
@@ -180,7 +181,7 @@ class Run:
                         symbol = data['s'].replace('USDT', '')
                         vtoken_addr = self._db.get_vtoken('symbol_map', symbol)
                         self._binance_price[vtoken_addr] = price_to_wei(data['p'])
-                        self._binance_price['0xfd5840cd36d94d7229439859c0112a4185bc0255'] = 1e18
+
                         if vtoken_addr == '0xa07c5b74c9b40447a954e1466938b865b6bbea36':
                             # WBNB
                             self._binance_price['0x6bca74586218db34cdb402295796b79663d816e9'] = self._binance_price[
