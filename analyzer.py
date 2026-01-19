@@ -13,7 +13,7 @@ class Analyzer:
     def calculate_hf(self, user_profile, prices):
         total_collateral_usd = 0
         total_debt_usd = 0
-        self.Log.info(user_profile)
+        self.Log.info(f"用户资产: {user_profile}")
         # 从用户持仓细节中提取资产并乘以 prices 里的实时价
         for v_addr, amount in user_profile.items():
             if not prices.get(v_addr):
@@ -32,7 +32,7 @@ class Analyzer:
 
         if total_debt_usd > 0:
             hf = total_collateral_usd / total_debt_usd
-            self.Log.info(hf)
+            self.Log.info(f"用户健康度: {hf}")
             return hf
         return float('inf')
 
@@ -49,12 +49,11 @@ class Analyzer:
             self._db.update_user_profile(f"user_profile:{user_address}", user_profile)
 
         hf = self.calculate_hf(user_profile, prices)
-        if hf <= 1.2:
-            self._db.update_user_hf_in_order("high_risk_queue", {user_address: hf})
+        self._db.update_user_hf_in_order("high_risk_queue", {user_address: hf})
         report = {
             "user_address": user_address,
             "health_factor": hf,
-            "is_liquidatable": 0.9 <= hf <= 1.1,
+            "is_liquidatable": 1.0 <= hf <= 1.105,
         }
         return report
 
