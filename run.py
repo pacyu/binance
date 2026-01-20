@@ -164,7 +164,7 @@ class Run:
                                 asyncio.create_task(self._process_and_analyze(user_addr))
                         except LogTopicError as e:
                             self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}, 日志: {log}")
-            except ConnectionClosedError as e:
+            except (ConnectionClosedError, TimeoutError) as e:
                 self.Log.error(f"监听事件-发生异常: {e}, 异常类型: {type(e)}, 正在重新连接...")
                 await asyncio.sleep(config.RETRY_DELAY)
 
@@ -194,7 +194,7 @@ class Run:
                                 vtoken_addr] * self._client.get_exchange_rate(vtoken_addr) * 1e18
 
                         asyncio.create_task(self._check_opportunity(vtoken_addr))
-            except ConnectionClosedError as e:
+            except (ConnectionClosedError, TimeoutError) as e:
                 self.Log.error(f"监听价格-发生异常: {e}, 异常类型: {type(e)}, 正在重新连接...")
                 await asyncio.sleep(config.RETRY_DELAY)
 

@@ -41,15 +41,15 @@ comptroller = [{
     ],
     "stateMutability": "view",
     "type": "function"
-},{
-    "constant": True,
-    "inputs": [],
-    "name": "liquidationIncentiveMantissa",
-    "outputs": [{"name": "", "type": "uint256"}],
-    "payable": False,
-    "stateMutability": "view",
-    "type": "function"
 }]
+# incentive_mantissa_abi = [{
+#     "constant":True,
+#     "inputs":[],
+#     "name":"liquidationIncentiveMantissa",
+#     "outputs":[{"internalType":"uint256","name":"","type":"uint256"}],
+#     "stateMutability":"view",
+#     "type":"function"
+# }]
 exchange_rate_abi = [{
     "constant":True,
     "inputs":[],

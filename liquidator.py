@@ -11,15 +11,15 @@ class Liquidator:
         self._db = db
         self.Log = logger
         self.analyzer = Analyzer(self._client, self._db, self.Log)
+        self.incentive_rate = 1.1
 
     async def handle_liquidation(self, report):
         user_addr = report['user_address']
         user_profile = await self.analyzer.get_user_snapshot(user_addr)
         prices = await self._client.get_oracle_price(list(user_profile.keys()))
         hf = self.analyzer.calculate_hf(user_profile, prices)
-        if 0.9 < hf <= 1.0:
-            incentive_rate = self._client.get_liquidation_incentive()
-            liq = self.is_liquidation(user_profile, prices, incentive_rate)
+        if 0.9 <= hf < 1.05:
+            liq = self.is_liquidation(user_profile, prices, self.incentive_rate)
             if liq['is_profitable']:
                 self.Log.info(liq)
                 # self.execute_liquidation(
@@ -49,7 +49,7 @@ class Liquidator:
 
         # 排序：债务按价值从大到小
         best_debt = sorted(debts, key=lambda x: x['value'], reverse=True)[0]
-        # 排序：抵押品优先选价值大的（或者根据你的喜好选 CF 低的）
+        # 排序：抵押品优先选价值大的（或者根据喜好选 CF 低的）
         best_collateral = sorted(collaterals, key=lambda x: x['value'], reverse=True)[0]
 
         return best_debt, best_collateral
@@ -98,8 +98,8 @@ class Liquidator:
         # 2. 抵押品限制：不能超过抵押品能赔付的上限 (假设奖励 10%)
         limit_by_collateral = best_collateral_val / incentive_rate
 
-        # 3. 你的策略限制：比如你账户里只有 500 USDT，或者你不想在山寨币上冒险
-        my_max_fund = 500.0
+        # 3. 策略限制：比如账户里只有 50 USDT，或者不想在山寨币上冒险
+        my_max_fund = 50.0
 
         # 4. 取最小值
         repay_usd = min(limit_by_protocol, limit_by_collateral, my_max_fund)
@@ -123,13 +123,13 @@ class Liquidator:
                 vtoken_debt_address,
                 vtoken_collateral_address)
 
-            print(f"🚀 清算交易已发出！Hash: {tx_hash.hex()}")
+            self.Log.info(f"🚀 清算交易已发出！Hash: {tx_hash.hex()}")
 
             receipt = self._client.wait_for_transaction_receipt(tx_hash)
             if receipt['status'] == 1:
-                print("✅ 清算成功！")
+                self.Log.info("✅ 清算成功！")
             else:
-                print("🛑 交易回滚 (Reverted)")
+                self.Log.info("🛑 交易回滚 (Reverted)")
 
         except Exception as e:
             print(f"⚠️ 执行异常: {e}")

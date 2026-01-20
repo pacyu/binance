@@ -112,8 +112,8 @@ class VenusClient:
 
     def get_symbol(self, vtoken_address: str)-> str:
         contract = self.get_contract(vtoken_address, abi.vtoken)
-        contract = self.get_contract(contract.functions.underlying().call(), abi.vtoken)
-        return contract.functions.symbol().call()
+        v_contract = self.get_contract(contract.functions.underlying().call(), abi.vtoken)
+        return v_contract.functions.symbol().call()
 
     def get_all_markets(self) -> List[str]:
         contract = self.get_contract(config.VENUS_CORE_COMPTROLLER_ADDR, abi.comptroller)
@@ -210,15 +210,15 @@ class VenusClient:
         ]
         return await Multicall(calls, _w3=self._w3).coroutine()
 
-    def get_liquidation_incentive(self) -> float:
-        """
-        获取清算奖励比例。
-
-        :return: float
-        """
-        contract = self.get_contract(self.comptroller_addr, abi.comptroller)
-        mantissa = contract.functions.liquidationIncentiveMantissa().call()
-        return mantissa / 10 ** 18
+    # def get_liquidation_incentive(self) -> float:
+    #     """
+    #     获取清算奖励比例。
+    #
+    #     :return: float
+    #     """
+    #     contract = self.get_contract(self.comptroller_addr, abi.incentive_mantissa_abi)
+    #     mantissa = contract.functions.liquidationIncentiveMantissa().call()
+    #     return mantissa / 10 ** 18
 
     def wait_for_transaction_receipt(self, tx_hash) -> TxReceipt:
         return self._w3.eth.wait_for_transaction_receipt(tx_hash)
@@ -249,18 +249,7 @@ class VenusClient:
         # 自动管理 Nonce
         nonce = self._w3.eth.get_transaction_count(self.account_address, 'pending')
 
-        # 预估 Gas (防止浪费钱)
-        gas_limit = v_contract.functions.liquidateBorrow(
-            user_address, int(amount), vtoken_collateral_address
-        ).estimate_gas({'from': self.account_address})
-
-        tx_params = {
-            'from': self.account_address,
-            'nonce': nonce,
-            'gas': int(gas_limit * 1.2),  # 20% 冗余
-            'gasPrice': int(self.get_gas_price() * gas_multiplier),
-            # 'chainId': 97  # BSC Testnet
-        }
+        tx_params = {}
 
         if is_native: # 如果是 BNB
             tx_params['value'] = amount
@@ -271,6 +260,20 @@ class VenusClient:
             lb = v_contract.functions.liquidateBorrow(
                 user_address, amount, vtoken_collateral_address
             )
+
+        try:
+            # 预估 Gas (防止浪费钱)
+            gas_limit = lb.estimate_gas({'from': self.account_address})
+        except Exception as e:
+            raise Exception(f"Gas estimation failed: {e}")
+
+        tx_params.update({
+            'from': self.account_address,
+            'nonce': nonce,
+            'gas': int(gas_limit * 1.2),  # 20% 冗余
+            'gasPrice': int(self.get_gas_price() * gas_multiplier),
+            'chainId': 56
+        })
 
         tx = lb.build_transaction(tx_params)
 
