@@ -137,7 +137,7 @@ class Run:
                     asyncio.create_task(self.engine.handle_liquidation(risky_report))
                 if risky_report['health_factor'] > 1.2 or risky_report['health_factor'] < 0.6:
                     self._db.remove_user_hf_from_high_risk('high_risk_queue', user_addr)
-            await asyncio.sleep(3)
+            await asyncio.sleep(60)
 
     async def listen_user_events(self):
         subscribe_msg = {
