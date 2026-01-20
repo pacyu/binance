@@ -130,7 +130,7 @@ class Run:
 
     async def poll_risk_check(self):
         while True:
-            user_address_list = self._db.get_user_hf_by_score(f'high_risk_queue', 0, 1.2)
+            user_address_list = self._db.get_user_hf_by_score(f'high_risk_queue', 0, 1.3)
             for user_addr in user_address_list:
                 risky_report = await self.analyzer.analyze_user(user_addr, self._binance_price)
                 if risky_report['is_liquidatable']:
@@ -201,8 +201,8 @@ class Run:
     async def main(self):
         await asyncio.gather(
             self.poll_risk_check(),
-            self.listen_user_events(),
-            self.listen_binance_price_updates(),
+            # self.listen_user_events(),
+            # self.listen_binance_price_updates(),
         )
 
 if __name__ == '__main__':
