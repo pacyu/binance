@@ -167,7 +167,7 @@ class VenusClient:
 
         # 5. 构建你的数据结构
         return {
-            "symbol": symbol,
+            "symbol": symbol.lower(),
             "v_symbol": v_symbol,
             "address": v_addr.lower(),
             "underlying_decimal": underlying_decimal,

@@ -25,12 +25,13 @@ class Run:
     def __call__(self):
         for item in get_realtime_prices():
             if item['symbol'].endswith('USDT'):
-                symbol = item['symbol'].replace('USDT', '')
-                token = self._db.get_vtoken('venus:assets:symbol', symbol)
-                if token:
-                    token = json.loads(token)
-                    self._binance_price[token['address']] = price_to_wei(item['price'])
-        self._binance_price['0xfd5840cd36d94d7229439859c0112a4185bc0255'] = 1e8
+                symbol = item['symbol'].replace('USDT', '').lower()
+                if symbol == 'btc':
+                    symbol = 'btcb'
+                vtoken_addr = self._db.get_vtoken('symbol_map', symbol)
+                if vtoken_addr:
+                    self._binance_price[vtoken_addr] = price_to_wei(item['price'])
+        self._binance_price['0xfd5840cd36d94d7229439859c0112a4185bc0255'] = 1e18
         asyncio.run(self.main())
 
     async def _check_opportunity(self, vtoken_addr):
@@ -178,17 +179,20 @@ class Run:
                         data = message['data']
                         self.Log.debug(f"💴 代币: {data['s']} | 价格: {data['p']}"
                               f" | 更新时间: {datetime.fromtimestamp(float(data['E']) / 1000).strftime('%Y-%m-%d %H:%M:%S')}")
-                        symbol = data['s'].replace('USDT', '')
+                        symbol = data['s'].replace('USDT', '').lower()
+                        if symbol == 'btc':
+                            symbol = 'btcb'
                         vtoken_addr = self._db.get_vtoken('symbol_map', symbol)
                         self._binance_price[vtoken_addr] = price_to_wei(data['p'])
 
                         if vtoken_addr == '0xa07c5b74c9b40447a954e1466938b865b6bbea36':
                             # WBNB
                             self._binance_price['0x6bca74586218db34cdb402295796b79663d816e9'] = self._binance_price[
-                                vtoken_addr]
+                                vtoken_addr] * 1e18
                             # asBNB
                             self._binance_price['0xcc1db43a06d97f736c7b045aedd03c6707c09bdf'] = self._binance_price[
-                                vtoken_addr] * self._client.get_exchange_rate(vtoken_addr)
+                                vtoken_addr] * self._client.get_exchange_rate(vtoken_addr) * 1e18
+
                         asyncio.create_task(self._check_opportunity(vtoken_addr))
             except ConnectionClosedError as e:
                 self.Log.error(f"监听价格-发生异常: {e}, 异常类型: {type(e)}, 正在重新连接...")

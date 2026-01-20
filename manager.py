@@ -34,7 +34,7 @@ class DataManager:
             self._db.update_user_profile(f"user_profile:{user_address}", user_profile)
 
     def generate_venus_config(self, symbols):
-        local_symbols_set = set(s.upper() for s in symbols)
+        local_symbols_set = set(s.lower() for s in symbols)
 
         comptroller_abi = [{"inputs": [], "name": "getAllMarkets",
                             "outputs": [{"internalType": "contract VToken[]", "name": "", "type": "address[]"}],
@@ -87,19 +87,19 @@ class DataManager:
             u_dec = res_u.get(f"dec_{v_addr}", 18) if not info['is_native'] else 18
 
             token_dict = {
-                "symbol": u_sym,
+                "symbol": u_sym.lower(),
                 "v_symbol": info['v_sym'],
                 "address": v_addr.lower(),
                 "underlying_decimal": u_dec,
                 "cf": info['cf'],  # 新增：抵押因子 (如 0.8)
                 "is_native": info['is_native'],
-                "venus_supported": u_sym.upper() in local_symbols_set,
+                "venus_supported": u_sym.lower() in local_symbols_set,
                 "oracle_precision": 10 ** (36 - u_dec)
             }
-            self._db.update_venus_vtoken('venus:assets:symbol', u_sym, json.dumps(token_dict))
+            self._db.update_venus_vtoken('venus:assets:symbol', u_sym.lower(), json.dumps(token_dict))
             self._db.update_venus_vtoken('venus:assets:v_addr', v_addr.lower(), json.dumps(token_dict))
-            self._db.update_token_to_symbol('vtoken_map', {v_addr.lower(): u_sym})
-            self._db.update_token_to_symbol('symbol_map', {u_sym: v_addr.lower()})
+            self._db.update_token_to_symbol('vtoken_map', {v_addr.lower(): u_sym.lower()})
+            self._db.update_token_to_symbol('symbol_map', {u_sym.lower(): v_addr.lower()})
 
 
 

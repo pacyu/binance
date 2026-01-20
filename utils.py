@@ -6,22 +6,18 @@ def get_realtime_price(symbol):
     从币安 API 获取实时价格，不消耗 NodeReal 额度
     """
     url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}USDT"
-    try:
-        price = float(requests.get(url).json()['price'])
-        return price
-    except Exception as e:
-        return None
+
+    price = float(requests.get(url).json()['price'])
+    return price
 
 def get_realtime_prices():
     """
     从币安 API 获取实时价格，不消耗 NodeReal 额度
     """
     url = f"https://api.binance.com/api/v3/ticker/price"
-    try:
-        prices = requests.get(url).json()
-        return prices
-    except Exception as e:
-        return None
+
+    prices = requests.get(url).json()
+    return prices
 
 def get_binance_symbols() -> list:
     url = "https://api.binance.com/api/v3/exchangeInfo"
@@ -59,14 +55,5 @@ def usd_to_wei(optimal_usd, oracle_price_mantissa, token_decimals) -> int:
     return repay_amount_wei
 
 def price_to_wei(price_str: str) -> int:
-    # 将字符串转为 Decimal 以保持精度，然后乘以 10^8
     price_decimal = Decimal(price_str)
-    # 统一转换为和 Chainlink 相同的 8 位精度整数
-    return int(price_decimal * Decimal(10 ** 8))
-
-
-# if __name__ == '__main__':
-#     print(get_binance_symbols())
-#     print(get_realtime_prices())
-#     r = requests.get('https://api.pancakeswap.info/api/v2/tokens/0xcc1db43a06d97f736c7b045aedd03c6707c09bdf')
-#     print(r.text)
+    return int(price_decimal * Decimal(10 ** 18))
