@@ -102,5 +102,31 @@ class DataManager:
             self._db.update_token_to_symbol('vtoken_map', {v_addr.lower(): u_sym.lower()})
             self._db.update_token_to_symbol('symbol_map', {u_sym.lower(): v_addr.lower()})
 
+    def prepare_environment(self):
+        """
+        初始化环境：包括无限授权和余额检查。
+        """
+        # 为了提速，我们可以并发检查，但顺序发送授权交易以避免 Nonce 冲突
+        markets = self._db.get_markets('asset:v_addr')
+        nonce = self._client.get_transaction_count()
+
+        for market in markets:
+            market = json.loads(market)
+            if market['symbol'] == 'bnb':
+                continue  # 原生 BNB 不需要 Approve
+
+            try:
+                tx_hash, allowance, new_nonce = self._client.ensure_unlimited_approval(
+                    market['underlying_address'],
+                    market['address'],
+                    nonce
+                )
+                nonce = new_nonce  # 更新 Nonce 供下一个使用
+                if tx_hash:
+                    print(f"⏳ 授权交易已发出 {market['symbol']}, 额度:{allowance}, Hash: {tx_hash.hex()}")
+                else:
+                    print(f"🎉 额度足够: {allowance}无需授权")
+            except Exception as e:
+                print(f"⚠️ 授权失败: {e}")
 
 

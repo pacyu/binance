@@ -24,7 +24,7 @@ class Run:
         self.analyzer = Analyzer(self._client, self._db, self.Log)
         self.engine = Liquidator(self._client, self._db, self.Log)
         self._binance_price = {}
-        self.event = self._client.get_event()
+        self._event = self._client.get_event()
 
     def __call__(self):
         for item in get_realtime_prices():
@@ -39,11 +39,20 @@ class Run:
         asyncio.run(self.main())
 
     async def _check_opportunity(self, vtoken_addr):
-        user_address_list = self._db.read_by_name(f'asset:user:{vtoken_addr}')
-        for user_addr in user_address_list:
-            risky_report = await self.analyzer.analyze_user(user_addr, self._binance_price)
+        user_address_list = self._db.read_by_name(f'asset:users:{vtoken_addr}')
+
+        if not user_address_list:
+            return
+
+        async def _process_user(u_addr):
+            risky_report = await self.analyzer.analyze_user(u_addr, self._binance_price)
             if risky_report['is_liquidatable']:
-                asyncio.create_task(self.engine.handle_liquidation(risky_report))
+                await self.engine.handle_liquidation(risky_report)
+
+        batch_size = 20
+        for i in range(0, len(user_address_list), batch_size):
+            batch = user_address_list[i: i + batch_size]
+            await asyncio.gather(*(_process_user(addr) for addr in batch))
 
     def _process_events_log(self, log):
         vtoken_addr = log['address']
@@ -56,7 +65,7 @@ class Run:
             #     self._db.update_venus_vtoken('venus:assets:symbol', token['symbol'], json.dumps(token))
             #     self._db.update_venus_vtoken('venus:assets:v_addr', vtoken_addr.lower(), json.dumps(token))
 
-            borrow_event = self.event.Borrow()
+            borrow_event = self._event.Borrow()
             decoded = borrow_event.process_log(log)
             user_addr = decoded['args']['borrower']
             borrow_amount = decoded['args']['borrowAmount'] / 1e18
@@ -76,7 +85,7 @@ class Run:
         #                   f" | 存入资产数量: {mint_amount} | 获得代币数量: {mint_tokens}")
 
         elif topic == config.TOPICS['Redeem']:
-            redeem_event = self.event.Redeem()
+            redeem_event = self._event.Redeem()
             decoded = redeem_event.process_log(log)
             user_addr = decoded['args']['redeemer']
             redeem_amount = decoded['args']['redeemAmount'] / 1e18
@@ -86,7 +95,7 @@ class Run:
                            f" | transactionHash: {log['transactionHash']}")
 
         elif topic == config.TOPICS['RepayBorrow']:
-            repay_borrow_event = self.event.RepayBorrow()
+            repay_borrow_event = self._event.RepayBorrow()
             decoded = repay_borrow_event.process_log(log)
             payer_addr = decoded['args']['payer']
             user_addr = decoded['args']['borrower']
@@ -100,7 +109,7 @@ class Run:
                            f" | transactionHash: {log['transactionHash']}")
 
         elif topic == config.TOPICS['LiquidateBorrow']:
-            liquidate_borrow_event = self.event.LiquidateBorrow()
+            liquidate_borrow_event = self._event.LiquidateBorrow()
             decoded = liquidate_borrow_event.process_log(log)
             liquidator_addr = decoded['args']['liquidator']
             user_addr = decoded['args']['borrower']
@@ -114,7 +123,7 @@ class Run:
                           f" | transactionHash: {log['transactionHash']}")
 
         else:
-            market_entered_event = self.event.MarketEntered()
+            market_entered_event = self._event.MarketEntered()
             decoded = market_entered_event.process_log(log)
             user_addr = decoded['args']['user']
             market_addr = decoded['args']['market']
@@ -205,8 +214,8 @@ class Run:
     async def main(self):
         await asyncio.gather(
             self.poll_risk_check(),
-            # self.listen_user_events(),
-            # self.listen_binance_price_updates(),
+            self.listen_user_events(),
+            self.listen_binance_price_updates(),
         )
 
 if __name__ == '__main__':

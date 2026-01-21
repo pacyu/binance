@@ -9,6 +9,13 @@ class Analyzer:
         self._client = client
         self._db = db
         self.Log = logger
+        self._vtoken_cache = {}
+
+    def _load_vtoken_cache(self):
+        all_vtokens = self._db.get_markets('asset:v_addr')
+        for item in all_vtokens:
+            token = json.loads(item)
+            self._vtoken_cache[token['address']] = token
 
     def calculate_hf(self, user_profile, prices):
         total_collateral_usd = 0
@@ -20,9 +27,7 @@ class Analyzer:
                 break
 
             amount = float(amount)
-
-            token = json.loads(self._db.get_vtoken('asset:v_addr', v_addr))
-
+            token = self._vtoken_cache[v_addr]
             current_price = prices[v_addr] / token['oracle_precision']
             usd_price = amount * current_price
             if amount > 0:

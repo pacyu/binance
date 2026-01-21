@@ -7,6 +7,8 @@ BSC_WSS_URI = "wss://bsc-rpc.publicnode.com"
 BINANCE_PRICE_WSS_URI = "wss://stream.binance.com:9443/stream?streams="
 
 VENUS_CORE_COMPTROLLER_ADDR = "0xfd36e2c2a6789db23113685031d7f16329158384"
+
+BNB_VTOKEN_ADDRESS = "0xa07c5b74c9b40447a954e1466938b865b6bbea36"
 # 常见的隔离池 (Isolated Pools)
 # 如果你想横扫全网，这些池子也需要监控，但每个池子都有独立的 Comptroller address
 VENUS_LIQUID_STAKING_POOL = "0xd3c796628d6ba796604be2d1323e2974578b87a3"

@@ -283,6 +283,56 @@ class VenusClient:
         signed_tx = self._w3.eth.account.sign_transaction(tx, self.private_key)
         return self._w3.eth.send_raw_transaction(signed_tx.rawTransaction)
 
+    def simulate_liquidation_tx(self,
+                                user_address: str,
+                                amount: int,
+                                is_native: bool,
+                                vtoken_debt_address: str,
+                                vtoken_collateral_address: str) -> bool:
+        """
+        模拟提交清算交易。
+
+        :param user_address: 被清算人的钱包地址
+        :param amount: 你代为偿还的金额 (单位为 Wei)
+        :param is_native: 用户欠的币种是否为本位币BNB
+        :param vtoken_debt_address: 被清算人欠款的 vToken 合约地址 (如 vUSDT)
+        :param vtoken_collateral_address: 你想拿走的抵押品 vToken 合约地址 (如 vBNB)
+        :return: bool
+        """
+        # 实例化债务代币的 vToken 合约
+        # 如果债务是 BNB，调用 vBNB 合约；如果是其他，调用 vERC20 合约
+        vtoken_contract = self.get_contract(vtoken_debt_address, abi.vtoken)
+
+        # 准备调用参数
+        # 注意：不同 vToken 的 liquidateBorrow 签名略有不同
+        if is_native:
+            # vBNB.liquidateBorrow(borrower, vTokenCollateral)
+            # 注意：vBNB 清算需要发送 value，但 .call 同样可以模拟这个行为
+            call_function = vtoken_contract.functions.liquidateBorrow(
+                self.to_checksum_address(user_address),
+                self.to_checksum_address(vtoken_collateral_address)
+            )
+            # 模拟时需要带上 value 字段
+            res = call_function.call({
+                'from': self.account_address,
+                'value': amount
+            })
+        else:
+            # vERC20.liquidateBorrow(borrower, repayAmount, vTokenCollateral)
+            call_function = vtoken_contract.functions.liquidateBorrow(
+                self.to_checksum_address(user_address),
+                amount,
+                self.to_checksum_address(vtoken_collateral_address)
+            )
+            res = call_function.call({'from': self.account_address})
+
+        # Venus 的 liquidateBorrow 如果执行成功通常返回 0 (Error.NO_ERROR)
+        # 如果返回非 0 值，说明逻辑错误（如：清算额度超过限制等）
+        if res == 0:
+            return True
+        else:
+            return False
+
     def ensure_unlimited_approval(self, underlying_addr, vtoken_addr, current_nonce):
         """
         检查并执行单笔授权
@@ -307,6 +357,6 @@ class VenusClient:
             tx_hash = self._w3.eth.send_raw_transaction(signed_tx.rawTransaction)
 
             # 这里不使用 wait_for_receipt 阻塞，直接增加 nonce 发下一笔
-            return tx_hash, current_nonce + 1
+            return tx_hash, allowance, current_nonce + 1
         # 否则就不需要授权，表示额度还够
-        return None, current_nonce
+        return None, allowance, current_nonce
