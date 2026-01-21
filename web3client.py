@@ -308,5 +308,5 @@ class VenusClient:
 
             # 这里不使用 wait_for_receipt 阻塞，直接增加 nonce 发下一笔
             return tx_hash, current_nonce + 1
-
-        return '', current_nonce
+        # 否则就不需要授权，表示额度还够
+        return None, current_nonce

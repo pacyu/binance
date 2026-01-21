@@ -1,7 +1,7 @@
 import json
+from logging import Logger
 from binance.redis_client import RedisClient
 from binance.web3client import VenusClient
-from binance.logger import Logger
 
 
 class Analyzer:
@@ -112,8 +112,8 @@ class Analyzer:
             self._db.update_user_asset_map_list(f'asset:users:{v_addr}', user_addr)
         return user_profile
 
-    def analyze_liquidable_users(self, user_address_list):
-        results = self._client.get_user_liquidity(user_address_list)
+    async def analyze_liquidable_users(self, user_address_list):
+        results = await self._client.get_user_liquidity(user_address_list)
         for user_address, (error, liquidity, shortfall) in results.items():
             shortfall_usd = shortfall / 10 ** 18
             liq_usd = liquidity / 10 ** 18

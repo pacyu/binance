@@ -1,6 +1,6 @@
 import json
+from logging import Logger
 from analyzer import Analyzer
-from binance.logger import Logger
 from binance.redis_client import RedisClient
 from binance.web3client import VenusClient
 from utils import get_realtime_price, usd_to_wei
@@ -34,9 +34,12 @@ class Liquidator:
                     nonce
                 )
                 nonce = new_nonce  # 更新 Nonce 供下一个使用
-                self.Log.info(f"⏳ 授权交易已发出 {market['symbol']}, Hash: {tx_hash.hex()}")
+                if tx_hash:
+                    self.Log.info(f"⏳ 授权交易已发出 {market['symbol']}, Hash: {tx_hash.hex()}")
+                else:
+                    self.Log.info("🎉 额度足够，无需授权")
             except Exception as e:
-                self.Log.error(f"授权失败: {e}")
+                self.Log.error(f"⚠️ 授权失败: {e}")
 
     async def handle_liquidation(self, report):
         user_addr = report['user_address']
@@ -46,9 +49,8 @@ class Liquidator:
         if 0.9 <= hf < 1.05:
             liq = self.is_liquidation(user_profile, prices, self.incentive_rate)
             if liq['is_profitable']:
-                self.Log.info(liq)
-                # self.execute_liquidation(
-                #     user_addr, liq['repay_amount'], liq['best_debt_symbol'], liq['best_collateral_symbol'])
+                self.execute_liquidation(
+                    user_addr, liq['repay_amount'], liq['best_debt_symbol'], liq['best_collateral_symbol'], prices)
         self._db.update_user_profile(f"user_profile:{user_addr}", user_profile)
         self._db.update_user_hf_in_order("high_risk_queue", {user_addr: hf})
 
@@ -131,7 +133,7 @@ class Liquidator:
 
         return repay_usd
 
-    def execute_liquidation(self, user_address, repay_amount, prices, vtoken_debt_symbol, vtoken_collateral_symbol):
+    def execute_liquidation(self, user_address, repay_amount, vtoken_debt_symbol, vtoken_collateral_symbol, prices):
         try:
             token = json.loads(self._db.get_vtoken('asset:symbol', vtoken_debt_symbol))
             vtoken_debt_address = token['address']
