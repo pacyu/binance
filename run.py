@@ -198,7 +198,7 @@ class Run:
                         vtoken_addr = self._db.get_vtoken('symbol_map', symbol)
                         self._binance_price[vtoken_addr] = price_to_wei(data['p'])
 
-                        if vtoken_addr == '0xa07c5b74c9b40447a954e1466938b865b6bbea36':
+                        if vtoken_addr == config.BNB_VTOKEN_ADDRESS:
                             # WBNB
                             self._binance_price['0x6bca74586218db34cdb402295796b79663d816e9'] = self._binance_price[
                                 vtoken_addr] * 1e18
