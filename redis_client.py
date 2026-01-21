@@ -63,6 +63,9 @@ class RedisClient:
     def vtoken_exists(self, name, address):
         return self._db.hexists(name, address)
 
+    def get_markets(self, name):
+        return self._db.hvals(name)
+
     def get_vtoken(self, name, key):
         return self._db.hget(name, key)
 

@@ -1,9 +1,11 @@
+import os
 import json
 import asyncio
 import config
 import websockets
 from logger import Logger
 from datetime import datetime
+from dotenv import load_dotenv
 from web3client import VenusClient
 from analyzer import Analyzer
 from liquidator import Liquidator
@@ -14,8 +16,10 @@ from utils import price_to_wei, get_realtime_prices
 
 class Run:
     def __init__(self):
+        load_dotenv()
+        private_key = os.getenv('PRIVATE_KEY')
         self._db = RedisClient()
-        self._client = VenusClient(config.NODEREAL_RPC_URL, config.VENUS_CORE_COMPTROLLER_ADDR)
+        self._client = VenusClient(config.NODEREAL_RPC_URL, config.VENUS_CORE_COMPTROLLER_ADDR, private_key)
         self.Log = Logger()()
         self.analyzer = Analyzer(self._client, self._db, self.Log)
         self.engine = Liquidator(self._client, self._db, self.Log)
@@ -46,7 +50,7 @@ class Run:
         topic = log['topics'][0]
 
         if topic == config.TOPICS['Borrow']:
-            # token = self._db.get_vtoken('venus:assets:v_addr', vtoken_addr.lower())
+            # token = self._db.get_vtoken('asset:v_addr', vtoken_addr.lower())
             # if not token:
             #     token = self._client.get_vtoken(vtoken_addr.lower())
             #     self._db.update_venus_vtoken('venus:assets:symbol', token['symbol'], json.dumps(token))

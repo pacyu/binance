@@ -89,6 +89,7 @@ class DataManager:
             token_dict = {
                 "symbol": u_sym.lower(),
                 "v_symbol": info['v_sym'],
+                "underlying_address": ('' if info['is_native'] else info["u_addr"].lower()),
                 "address": v_addr.lower(),
                 "underlying_decimal": u_dec,
                 "cf": info['cf'],  # 新增：抵押因子 (如 0.8)
@@ -96,8 +97,8 @@ class DataManager:
                 "venus_supported": u_sym.lower() in local_symbols_set,
                 "oracle_precision": 10 ** (36 - u_dec)
             }
-            self._db.update_venus_vtoken('venus:assets:symbol', u_sym.lower(), json.dumps(token_dict))
-            self._db.update_venus_vtoken('venus:assets:v_addr', v_addr.lower(), json.dumps(token_dict))
+            self._db.update_venus_vtoken('asset:symbol', u_sym.lower(), json.dumps(token_dict))
+            self._db.update_venus_vtoken('asset:v_addr', v_addr.lower(), json.dumps(token_dict))
             self._db.update_token_to_symbol('vtoken_map', {v_addr.lower(): u_sym.lower()})
             self._db.update_token_to_symbol('symbol_map', {u_sym.lower(): v_addr.lower()})
 

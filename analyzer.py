@@ -21,7 +21,7 @@ class Analyzer:
 
             amount = float(amount)
 
-            token = json.loads(self._db.get_vtoken('venus:assets:v_addr', v_addr))
+            token = json.loads(self._db.get_vtoken('asset:v_addr', v_addr))
 
             current_price = prices[v_addr] / token['oracle_precision']
             usd_price = amount * current_price

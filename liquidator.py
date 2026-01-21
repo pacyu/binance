@@ -12,6 +12,31 @@ class Liquidator:
         self.Log = logger
         self.analyzer = Analyzer(self._client, self._db, self.Log)
         self.incentive_rate = 1.1
+        self.prepare_environment()
+
+    def prepare_environment(self):
+        """
+        初始化环境：包括无限授权和余额检查。
+        """
+        # 为了提速，我们可以并发检查，但顺序发送授权交易以避免 Nonce 冲突
+        markets = self._db.get_markets('asset:v_addr')
+        nonce = self._client.get_transaction_count()
+
+        for market in markets:
+            market = json.loads(market)
+            if market['symbol'] == 'bnb':
+                continue  # 原生 BNB 不需要 Approve
+
+            try:
+                tx_hash, new_nonce = self._client.ensure_unlimited_approval(
+                    market['underlying_address'],
+                    market['address'],
+                    nonce
+                )
+                nonce = new_nonce  # 更新 Nonce 供下一个使用
+                self.Log.info(f"⏳ 授权交易已发出 {market['symbol']}, Hash: {tx_hash.hex()}")
+            except Exception as e:
+                self.Log.error(f"授权失败: {e}")
 
     async def handle_liquidation(self, report):
         user_addr = report['user_address']
@@ -37,7 +62,7 @@ class Liquidator:
         collaterals = []
 
         for v_addr, balance in user_profile.items():
-            token = json.loads(self._db.get_vtoken('venus:assets:v_addr', v_addr))
+            token = json.loads(self._db.get_vtoken('asset:v_addr', v_addr))
 
             price = prices[v_addr] / token['oracle_precision']
             value_usd = abs(balance) * price
@@ -108,7 +133,7 @@ class Liquidator:
 
     def execute_liquidation(self, user_address, repay_amount, prices, vtoken_debt_symbol, vtoken_collateral_symbol):
         try:
-            token = json.loads(self._db.get_vtoken('venus:assets:symbol', vtoken_debt_symbol))
+            token = json.loads(self._db.get_vtoken('asset:symbol', vtoken_debt_symbol))
             vtoken_debt_address = token['address']
             vtoken_collateral_address = self._db.get_vtoken('symbol_map', vtoken_collateral_symbol)
             repay_amount_wei = usd_to_wei(

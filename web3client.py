@@ -223,6 +223,9 @@ class VenusClient:
     def wait_for_transaction_receipt(self, tx_hash) -> TxReceipt:
         return self._w3.eth.wait_for_transaction_receipt(tx_hash)
 
+    def get_transaction_count(self) -> int:
+        return self._w3.eth.get_transaction_count(self.to_checksum_address(self.account_address), 'pending')
+
     def send_liquidation_tx(self,
                             user_address: str,
                             amount: int,
@@ -247,7 +250,7 @@ class VenusClient:
         v_contract = self.get_contract(vtoken_debt_address, abi.vtoken)
 
         # 自动管理 Nonce
-        nonce = self._w3.eth.get_transaction_count(self.account_address, 'pending')
+        nonce = self.get_transaction_count()
 
         tx_params = {}
 
@@ -279,3 +282,31 @@ class VenusClient:
 
         signed_tx = self._w3.eth.account.sign_transaction(tx, self.private_key)
         return self._w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+
+    def ensure_unlimited_approval(self, underlying_addr, vtoken_addr, current_nonce):
+        """
+        检查并执行单笔授权
+        """
+
+        # 使用 ERC20 ABI 实例化底层代币
+        token_contract = self.get_contract(underlying_addr, abi.erc20_abi)
+        allowance = token_contract.functions.allowance(
+            self.to_checksum_address(self.account_address), self.to_checksum_address(vtoken_addr)).call()
+
+        # 如果授权额度小于 1 亿美金 (安全阈值)，则重新授权
+        if allowance < 10 ** 8 * 10 ** 18:
+            max_uint256 = 2 ** 256 - 1
+            tx = (token_contract.functions.approve(self.to_checksum_address(vtoken_addr), max_uint256)
+            .build_transaction({
+                'from': self.account_address,
+                'nonce': current_nonce,
+                'gasPrice': self.get_gas_price()
+            }))
+
+            signed_tx = self._w3.eth.account.sign_transaction(tx, self.private_key)
+            tx_hash = self._w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+
+            # 这里不使用 wait_for_receipt 阻塞，直接增加 nonce 发下一笔
+            return tx_hash, current_nonce + 1
+
+        return '', current_nonce
