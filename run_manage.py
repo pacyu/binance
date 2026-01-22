@@ -35,4 +35,4 @@ if __name__ == "__main__":
     analyzer = Analyzer(w3client, redis_db, Logger()())
     manager = DataManager(w3client, redis_db, analyzer)
 
-    sync_token()
+    manager.prepare_environment()

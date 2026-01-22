@@ -39,8 +39,8 @@ class Run:
         asyncio.run(self.main())
 
     async def _check_opportunity(self, vtoken_addr):
-        user_address_list = self._db.read_by_name(f'asset:users:{vtoken_addr}')
-
+        user_address_list = list(self._db.read_by_name(f'asset:users:{vtoken_addr}'))
+        
         if not user_address_list:
             return
 

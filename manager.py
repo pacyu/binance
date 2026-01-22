@@ -123,7 +123,7 @@ class DataManager:
                 )
                 nonce = new_nonce  # 更新 Nonce 供下一个使用
                 if tx_hash:
-                    print(f"⏳ 授权交易已发出 {market['symbol']}, 额度:{allowance}, Hash: {tx_hash.hex()}")
+                    print(f"⏳ 授权交易已发出 {market['symbol']}, 可用额度:{allowance}, Hash: {tx_hash.hex()}")
                 else:
                     print(f"🎉 额度足够: {allowance}无需授权")
             except Exception as e:

@@ -10,6 +10,7 @@ class Analyzer:
         self._db = db
         self.Log = logger
         self._vtoken_cache = {}
+        self._load_vtoken_cache()
 
     def _load_vtoken_cache(self):
         all_vtokens = self._db.get_markets('asset:v_addr')
@@ -24,7 +25,7 @@ class Analyzer:
         # 从用户持仓细节中提取资产并乘以 prices 里的实时价
         for v_addr, amount in user_profile.items():
             if not prices.get(v_addr):
-                break
+                continue
 
             amount = float(amount)
             token = self._vtoken_cache[v_addr]
@@ -60,7 +61,7 @@ class Analyzer:
         report = {
             "user_address": user_address,
             "health_factor": hf,
-            "is_liquidatable": 0.9 <= hf < 1.105,
+            "is_liquidatable": 0.92 <= hf <= 0.97,
         }
         return report
 
