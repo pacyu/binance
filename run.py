@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import asyncio
 import config
 import websockets
@@ -25,6 +26,8 @@ class Run:
         self.engine = Liquidator(self._client, self._db, self.Log)
         self._binance_price = {}
         self._event = self._client.get_event()
+        self._task_queue = asyncio.Queue(maxsize=1000)
+        self._last_check = {}
 
     def __call__(self):
         for item in get_realtime_prices():
@@ -37,6 +40,34 @@ class Run:
                     self._binance_price[vtoken_addr] = price_to_wei(item['price'])
         self._binance_price['0xfd5840cd36d94d7229439859c0112a4185bc0255'] = 1e18
         asyncio.run(self.main())
+
+    async def event_worker(self):
+        while True:
+            task = await self._task_queue.get()
+
+            try:
+                if task["type"] == "user_event":
+                    await self._handle_user_event(task)
+
+                elif task["type"] == "price_update":
+                    await self._handle_price_event(task)
+
+            except Exception as e:
+                self.Log.error(f"发生异常: {e}, 任务: {task}")
+
+            finally:
+                self._task_queue.task_done()
+
+    async def _handle_user_event(self, event):
+        user = event["user"]
+        await self._process_and_analyze(user)
+
+    async def _handle_price_event(self, event):
+        vtoken = event["vtoken"]
+        if time.time() - self._last_check.get(vtoken, 0) < 2:
+            return
+        self._last_check[vtoken] = time.time()
+        await self._check_opportunity(vtoken)
 
     async def _check_opportunity(self, vtoken_addr):
         user_address_list = list(self._db.read_by_name(f'asset:users:{vtoken_addr}'))
@@ -53,6 +84,11 @@ class Run:
         for i in range(0, len(user_address_list), batch_size):
             batch = user_address_list[i: i + batch_size]
             await asyncio.gather(*(_process_user(addr) for addr in batch))
+
+    async def _process_and_analyze(self, user_addr):
+        risky_report = await self.analyzer.analyze_user(user_addr.lower(), self._binance_price)
+        if risky_report['is_liquidatable']:
+            asyncio.create_task(self.engine.handle_liquidation(risky_report))
 
     def _process_events_log(self, log):
         vtoken_addr = log['address']
@@ -74,6 +110,7 @@ class Run:
             self.Log.info(f"🔥 检测到用户借款事件! 合约地址: {vtoken_addr} | 借款人: {user_addr}"
                           f" | 借款金额: {borrow_amount} | 借款人总债务: {account_borrows}"
                           f" | 市场总债务: {total_borrows} | transactionHash: {log['transactionHash']}")
+            return 10, user_addr
 
         # elif topic == config.TOPICS['Mint']:
         #     mint_event = self.event.Mint()
@@ -93,6 +130,7 @@ class Run:
             self.Log.info(f"🔥 检测到用户赎回事件! 合约地址: {vtoken_addr} | 赎回者: {user_addr}"
                            f" | 赎回资产数量: {redeem_amount} | 销毁vToken数量: {redeem_tokens}"
                            f" | transactionHash: {log['transactionHash']}")
+            return 1, user_addr
 
         elif topic == config.TOPICS['RepayBorrow']:
             repay_borrow_event = self._event.RepayBorrow()
@@ -107,6 +145,7 @@ class Run:
                            f" | 借款人新债务: {account_borrows_new}"
                            f" | 市场总债务新值: {total_borrows_new}"
                            f" | transactionHash: {log['transactionHash']}")
+            return 1, user_addr
 
         elif topic == config.TOPICS['LiquidateBorrow']:
             liquidate_borrow_event = self._event.LiquidateBorrow()
@@ -121,6 +160,7 @@ class Run:
                           f" | 抵押品vToken地址: {vtoken_collateral_addr}"
                           f" | 清算者获得的抵押品vToken数量: {seize_tokens}"
                           f" | transactionHash: {log['transactionHash']}")
+            return 10, user_addr
 
         else:
             market_entered_event = self._event.MarketEntered()
@@ -134,12 +174,7 @@ class Run:
                           f" | 市场地址: {market_addr} | 抵押品数量: {collateral_balance}"
                           f" | 借款数量: {borrow_balance} | 抵押品汇率: {exchange_rate}"
                           f" | transactionHash: {log['transactionHash']}")
-        return user_addr
-
-    async def _process_and_analyze(self, user_addr):
-        risky_report = await self.analyzer.analyze_user(user_addr.lower(), self._binance_price)
-        if risky_report['is_liquidatable']:
-            asyncio.create_task(self.engine.handle_liquidation(risky_report))
+            return 10, user_addr
 
     async def poll_risk_check(self):
         while True:
@@ -164,31 +199,49 @@ class Run:
         }
         while True:
             try:
-                async with websockets.connect(config.BSC_WSS_URI) as web3:
-                    await web3.send(json.dumps(subscribe_msg))
-                    msg = json.loads(await web3.recv())
+                async with websockets.connect(
+                        config.BSC_WSS_URI, ping_timeout=60, ping_interval=30, close_timeout=10) as ws:
+                    await ws.send(json.dumps(subscribe_msg))
+                    msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=60))
                     self.Log.info(f"成功订阅全网 Borrow/Redeem/RepayBorrow/LiquidateBorrow/MarketEntered 事件, SubID: {msg['result']}")
                     while True:
                         try:
-                            message = json.loads(await web3.recv())
+                            message = json.loads(await asyncio.wait_for(ws.recv(), timeout=60))
                             if "params" in message and "result" in message["params"]:
                                 log = message["params"]["result"]
-                                user_addr = self._process_events_log(log)
-                                asyncio.create_task(self._process_and_analyze(user_addr))
+                                prior, user_addr = self._process_events_log(log)
+
+                                try:
+                                    self._task_queue.put_nowait({
+                                        "type": "user_event",
+                                        "user": user_addr,
+                                        "ts": time.time()
+                                    })
+                                except asyncio.QueueFull:
+                                    self.Log.warning("任务队列达到上线！")
+
                         except LogTopicError as e:
                             self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}, 日志: {log}")
+
+                        await asyncio.sleep(config.RETRY_DELAY_EVENT)
             except (ConnectionClosedError, TimeoutError) as e:
                 self.Log.error(f"监听事件-发生异常: {e}, 异常类型: {type(e)}, 正在重新连接...")
-                await asyncio.sleep(config.RETRY_DELAY)
+                retry_delay = min(2 ** config.RETRY_DELAY_EVENT, 60)
+                await asyncio.sleep(retry_delay)
+                config.RETRY_DELAY_EVENT += 1
 
     async def listen_binance_price_updates(self):
         streams = "/".join([f"{t.lower()}usdt@aggTrade" for t in self._db.get_all_symbols()])
         while True:
             try:
-                async with websockets.connect(config.BINANCE_PRICE_WSS_URI + streams) as ws:
+                async with websockets.connect(
+                        config.BINANCE_PRICE_WSS_URI + streams,
+                        ping_timeout=60,
+                        ping_interval=30,
+                        close_timeout=10) as ws:
                     self.Log.info("成功订阅实时 binance 价格更新事件推送")
                     while True:
-                        message = json.loads(await ws.recv())
+                        message = json.loads(await asyncio.wait_for(ws.recv(), timeout=60))
                         data = message['data']
                         self.Log.debug(f"💴 代币: {data['s']} | 价格: {data['p']}"
                               f" | 更新时间: {datetime.fromtimestamp(float(data['E']) / 1000).strftime('%Y-%m-%d %H:%M:%S')}")
@@ -206,16 +259,28 @@ class Run:
                             self._binance_price['0xcc1db43a06d97f736c7b045aedd03c6707c09bdf'] = self._binance_price[
                                 vtoken_addr] * self._client.get_exchange_rate(vtoken_addr) * 1e18
 
-                        asyncio.create_task(self._check_opportunity(vtoken_addr))
+                        try:
+                            self._task_queue.put_nowait({
+                                "type": "price_update",
+                                "vtoken": vtoken_addr,
+                                "ts": time.time()
+                            })
+                        except asyncio.QueueFull:
+                            self.Log.warning("任务队列达到上限！")
+
+                        await asyncio.sleep(config.DELAY_PRICE)
             except (ConnectionClosedError, TimeoutError) as e:
                 self.Log.error(f"监听价格-发生异常: {e}, 异常类型: {type(e)}, 正在重新连接...")
-                await asyncio.sleep(config.RETRY_DELAY)
+                retry_delay = min(2 ** config.RETRY_DELAY_PRICE, 60)
+                await asyncio.sleep(retry_delay)
+                config.RETRY_DELAY_PRICE += 1
 
     async def main(self):
         await asyncio.gather(
             self.poll_risk_check(),
             self.listen_user_events(),
             self.listen_binance_price_updates(),
+            self.event_worker(),
         )
 
 if __name__ == '__main__':

@@ -133,6 +133,39 @@ class VenusClient:
         contract = self.get_contract(vtoken_address, abi.exchange_rate_abi)
         return contract.functions.exchangeRateStored().call()
 
+    def get_cash(self, v_address: str) -> float:
+        v_contract = self.get_contract(v_address, abi.erc20_abi)
+        return v_contract.functions.getCash().call()
+
+    def get_pair(self, address: str) -> str:
+        contract = self.get_contract(config.PANCAKE_FACTORY_ADDR, abi.pair_abi)
+        return contract.functions.getPair(self.to_checksum_address(address), self.to_checksum_address(config.USDT_VTOKEN_ADDRESS)).call()
+
+    def get_reserves(self, address: str):
+        contract = self.get_contract(address, abi.reserves_abi)
+        reserves = contract.functions.getReserves().call()
+        token0 = contract.functions.token0().call()
+        token1 = contract.functions.token1().call()
+        return reserves, token0, token1
+
+    def get_dex_depth_score(self, v_address: str) -> float:
+        if v_address.lower() == config.USDT_VTOKEN_ADDRESS.lower():
+            return 1e99
+
+        pair_addr = self.get_pair(v_address)
+        if pair_addr == '0x0000000000000000000000000000000000000000':
+            return 0.0
+
+        reserves, token0, token1 = self.get_reserves(pair_addr)
+        if v_address.lower() == token0.lower():
+            usdt_reserve = reserves[0]
+        elif v_address.lower() == token1.lower():
+            usdt_reserve = reserves[1]
+        else:
+            return 0.0
+
+        return usdt_reserve / 1e18
+
     def get_vtoken(self, v_addr: str) -> dict:
         """
         获取vToken的底层基本信息

@@ -205,5 +205,52 @@ erc20_abi = [
         "name": "symbol",
         "outputs": [{"name": "", "type": "string"}],
         "type": "function",
+    },
+    {
+        "constant": True,
+        "inputs": [],
+        "name": "getCash",
+        "outputs": [{"name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function",
+    },
+]
+pair_abi = [
+    {
+        "constant":True,
+        "inputs":[{"name":"","type":"address"},{"name":"","type":"address"}],
+        "name":"getPair",
+        "outputs":[{"name":"","type":"address"}],
+        "type":"function"
     }
+]
+reserves_abi = [
+    {
+        "constant": True,
+        "inputs": [],
+        "name": "getReserves",
+        "outputs": [
+            {"name": "_reserve0", "type": "uint112"},
+            {"name": "_reserve1", "type": "uint112"},
+            {"name": "_blockTimestampLast", "type": "uint32"},
+        ],
+        "stateMutability": "view",
+        "type": "function",
+    },
+    {
+        "constant": True,
+        "inputs": [],
+        "name": "token0",
+        "outputs": [{"name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function",
+    },
+    {
+        "constant": True,
+        "inputs": [],
+        "name": "token1",
+        "outputs": [{"name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function",
+    },
 ]

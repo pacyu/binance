@@ -77,6 +77,7 @@ class DataManager:
             elif u_addr:
                 calls_u.append(Call(u_addr, ['decimals()(uint8)'], [(f"dec_{v_addr}", lambda x: x)]))
                 calls_u.append(Call(u_addr, ['symbol()(string)'], [(f"sym_{v_addr}", lambda x: x)]))
+                calls_u.append(Call(v_addr, ['getCash()(uint256)'], [(f"cash_{v_addr}", lambda x: x)]))
                 vtoken_to_underlying[v_addr] = {"u_addr": u_addr, "is_native": False, "v_sym": v_sym, "cf": cf}
 
         res_u = Multicall(calls_u, _w3=self._client.get_w3())()
@@ -85,6 +86,7 @@ class DataManager:
         for v_addr, info in vtoken_to_underlying.items():
             u_sym = res_u.get(f"sym_{v_addr}", "BNB") if not info['is_native'] else "BNB"
             u_dec = res_u.get(f"dec_{v_addr}", 18) if not info['is_native'] else 18
+            u_cash = res_u.get(f"cash_{v_addr}", 0) / 10 ** u_dec
 
             token_dict = {
                 "symbol": u_sym.lower(),
@@ -95,7 +97,12 @@ class DataManager:
                 "cf": info['cf'],  # 新增：抵押因子 (如 0.8)
                 "is_native": info['is_native'],
                 "venus_supported": u_sym.lower() in local_symbols_set,
-                "oracle_precision": 10 ** (36 - u_dec)
+                "oracle_precision": 10 ** (36 - u_dec),
+                "liquidity": {
+                    "cash": u_cash,
+                    "dex_depth_score": self._client.get_dex_depth_score(config.BNB_VTOKEN_ADDRESS if info['is_native'] else info["u_addr"]),
+                    "is_major": u_sym.lower() in config.MAJOR_TOKENS
+                }
             }
             self._db.update_venus_vtoken('asset:symbol', u_sym.lower(), json.dumps(token_dict))
             self._db.update_venus_vtoken('asset:v_addr', v_addr.lower(), json.dumps(token_dict))

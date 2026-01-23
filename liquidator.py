@@ -13,6 +13,14 @@ class Liquidator:
         self.Log = logger
         self.analyzer = Analyzer(self._client, self._db, self.Log)
         self.incentive_rate = 1.1
+        self._vtoken_cache = {}
+        self._load_vtoken_cache()
+
+    def _load_vtoken_cache(self):
+        all_vtokens = self._db.get_markets('asset:v_addr')
+        for item in all_vtokens:
+            token = json.loads(item)
+            self._vtoken_cache[token['address']] = token
 
     async def handle_liquidation(self, report):
         user_addr = report['user_address']
@@ -37,20 +45,38 @@ class Liquidator:
         collaterals = []
 
         for v_addr, balance in user_profile.items():
-            token = json.loads(self._db.get_vtoken('asset:v_addr', v_addr))
+            token = self._vtoken_cache.get(v_addr)
+            if not token:
+                continue
 
             price = prices[v_addr] / token['oracle_precision']
             value_usd = abs(balance) * price
 
             if balance < 0:  # 债务
-                debts.append({"symbol": token['symbol'], "value": value_usd})
+                debts.append({"v_addr": v_addr, "symbol": token['symbol'], "value": value_usd})
             elif balance > 0:  # 抵押品
-                collaterals.append({"symbol": token['symbol'], "value": value_usd, "cf": token['cf']})
+                depth = token['liquidity']['dex_depth_score']
+                impact = (value_usd / depth) if depth > 0 else 1.0
+
+                collaterals.append({
+                    "v_addr": v_addr,
+                    "symbol": token['symbol'],
+                    "value": value_usd,
+                    "cf": token['cf'],
+                    "dex_depth_score": depth,
+                    "slippage_risk_impact": impact
+                })
 
         # 排序：债务按价值从大到小
         best_debt = sorted(debts, key=lambda x: x['value'], reverse=True)[0]
-        # 排序：抵押品优先选价值大的（或者根据喜好选 CF 低的）
-        best_collateral = sorted(collaterals, key=lambda x: x['value'], reverse=True)[0]
+
+        # 首先排除滑点过高的那些抵押品
+        collaterals = [c for c in collaterals if c['slippage_risk_impact'] < config.MAX_SLIPPAGE_TOLERANCE]
+        if not collaterals:
+            return {}, {}
+
+        # 排序：抵押品优先选安全范围内的（即避免跟大鳄竞争，同时保证滑点风险不会超出预期）
+        best_collateral = sorted(collaterals, key=lambda x: x['dex_depth_score'])[0]
 
         return best_debt, best_collateral
 
@@ -64,12 +90,15 @@ class Liquidator:
         gas_cost_usd = gas_cost_bnb * bnb_price[config.BNB_VTOKEN_ADDRESS] / 1e18
 
         best_debt, best_collateral = self.find_best_liquidation_asset(user_profile, prices)
+        if not best_debt or not best_collateral:
+            return {"is_profitable": False}
 
         repay_amount_usd = self.get_optimal_repay_amount(best_debt['value'], best_collateral['value'], incentive_rate)
 
         # 滑点计算
         gross_reward_usd = repay_amount_usd * incentive_rate
-        slippage_loss_usd = gross_reward_usd * 0.003
+        slippage_risk_impact = best_collateral['slippage_risk_impact']
+        slippage_loss_usd = gross_reward_usd * slippage_risk_impact
 
         # 2. 计算收益
         gross_profit_usd = repay_amount_usd * (incentive_rate - 1)
@@ -84,9 +113,9 @@ class Liquidator:
         self.Log.info(f"----------------------")
 
         return {
-            "is_profitable": net_profit >= 2.0,  # 利润大于 2 刀才做
-            "best_debt_symbol": best_debt['symbol'],
-            "best_collateral_symbol": best_collateral['symbol'],
+            "is_profitable": net_profit >= 2.0 and slippage_risk_impact < config.MAX_SLIPPAGE_TOLERANCE, # 利润大于 2 刀且滑点风险小于0.02才做
+            "best_debt": best_debt,
+            "best_collateral": best_collateral,
             "repay_amount": repay_amount_usd
         }
 
@@ -106,24 +135,22 @@ class Liquidator:
 
         return repay_usd
 
-    def execute_liquidation(self, user_address, repay_amount, vtoken_debt_symbol, vtoken_collateral_symbol, prices):
+    def execute_liquidation(self, user_address, repay_amount, vtoken_debt, vtoken_collateral, prices):
         try:
-            token = json.loads(self._db.get_vtoken('asset:symbol', vtoken_debt_symbol))
-            vtoken_debt_address = token['address']
-            vtoken_collateral_address = self._db.get_vtoken('symbol_map', vtoken_collateral_symbol)
-            self.Log.info(f"代偿额度: {repay_amount}, 负债代币价格: {prices[vtoken_debt_address]}, {token}")
+            token = self._vtoken_cache[vtoken_debt['v_addr']]
+            self.Log.info(f"代偿额度: {repay_amount}, 负债代币价格: {prices[vtoken_debt['v_addr']]}, {token}")
             repay_amount_wei = usd_to_wei(
                 repay_amount,
-                prices[vtoken_debt_address],
+                prices[vtoken_debt['v_addr']],
                 token['oracle_precision'])
 
             try:
                 result = self._client.simulate_liquidation_tx(
                     user_address,
                     repay_amount_wei,
-                    True if vtoken_debt_symbol == 'BNB' else False,
-                    vtoken_debt_address,
-                    vtoken_collateral_address)
+                    True if vtoken_debt['symbol'] == 'BNB' else False,
+                    vtoken_debt['v_addr'],
+                    vtoken_collateral['v_addr'])
                 if not result:
                     self.Log.error(f"模拟清算失败")
                     return
@@ -134,9 +161,9 @@ class Liquidator:
             tx_hash =  self._client.send_liquidation_tx(
                 user_address,
                 repay_amount_wei,
-                True if vtoken_debt_symbol == 'BNB' else False,
-                vtoken_debt_address,
-                vtoken_collateral_address)
+                True if vtoken_debt['symbol'] == 'BNB' else False,
+                vtoken_debt['v_addr'],
+                vtoken_collateral['v_addr'])
 
             self.Log.info(f"🚀 清算交易已发出！Hash: {tx_hash.hex()}")
 
