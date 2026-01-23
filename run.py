@@ -41,7 +41,7 @@ class Run:
         self._binance_price['0xfd5840cd36d94d7229439859c0112a4185bc0255'] = 1e18
         asyncio.run(self.main())
 
-    async def event_worker(self):
+    async def listen_worker(self):
         while True:
             task = await self._task_queue.get()
 
@@ -280,7 +280,7 @@ class Run:
             self.poll_risk_check(),
             self.listen_user_events(),
             self.listen_binance_price_updates(),
-            self.event_worker(),
+            self.listen_worker(),
         )
 
 if __name__ == '__main__':
