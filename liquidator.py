@@ -1,37 +1,35 @@
-import json
+import asyncio
 import config
 from logging import Logger
 from analyzer import Analyzer
+from hexbytes import HexBytes
 from binance.redis_client import RedisClient
 from binance.web3client import VenusClient
 from utils import usd_to_wei
 
 class Liquidator:
-    def __init__(self, client: VenusClient, db: RedisClient, logger: Logger):
+    def __init__(self, client: VenusClient, db: RedisClient, logger: Logger, analyzer: Analyzer):
         self._client = client
         self._db = db
         self.Log = logger
-        self.analyzer = Analyzer(self._client, self._db, self.Log)
+        self.analyzer = analyzer
         self.incentive_rate = 1.1
-        self._vtoken_cache = {}
-        self._load_vtoken_cache()
+        self._execution_lock = None
+        self._vtoken_cache = analyzer.get_vtoken_cache()
 
-    def _load_vtoken_cache(self):
-        all_vtokens = self._db.get_markets('asset:v_addr')
-        for item in all_vtokens:
-            token = json.loads(item)
-            self._vtoken_cache[token['address']] = token
+    def set_execution_lock(self, lock):
+        self._execution_lock = lock
 
     async def handle_liquidation(self, report):
         user_addr = report['user_address']
         user_profile = await self.analyzer.get_user_snapshot(user_addr)
         prices = await self._client.get_oracle_price(list(user_profile.keys()))
         hf = self.analyzer.calculate_hf(user_profile, prices)
-        if 0.92 <= hf <= 0.97:
-            liq = self.is_liquidation(user_profile, prices, self.incentive_rate)
+        if hf < 1.0:
+            liq = await self.is_liquidation(user_profile, prices, self.incentive_rate)
             if liq['is_profitable']:
-                self.execute_liquidation(
-                    user_addr, liq['repay_amount'], liq['best_debt_symbol'], liq['best_collateral_symbol'], prices)
+                await self.execute_liquidation(
+                    user_addr, liq['repay_amount'], liq['best_debt'], liq['best_collateral'], liq['net_profit'], prices)
         self._db.update_user_profile(f"user_profile:{user_addr}", user_profile)
         self._db.update_user_hf_in_order("high_risk_queue", {user_addr: hf})
 
@@ -80,18 +78,18 @@ class Liquidator:
 
         return best_debt, best_collateral
 
-    def is_liquidation(self, user_profile, prices, incentive_rate=1.1):
+    async def is_liquidation(self, user_profile, prices, incentive_rate=1.1):
         # 1. 当前 Gas 价格 (BSC 约 1-3 gwei)
         gas_price_wei = self._client.get_gas_price()
         estimated_gas = 800000  # 清算交易通常消耗较多 gas
         gas_cost_bnb = (gas_price_wei * estimated_gas) / 1e18
 
-        bnb_price = self._client.get_oracle_price([config.BNB_VTOKEN_ADDRESS])
+        bnb_price = await self._client.get_oracle_price([config.BNB_VTOKEN_ADDRESS])
         gas_cost_usd = gas_cost_bnb * bnb_price[config.BNB_VTOKEN_ADDRESS] / 1e18
 
         best_debt, best_collateral = self.find_best_liquidation_asset(user_profile, prices)
         if not best_debt or not best_collateral:
-            return {"is_profitable": False}
+            return {"is_profitable": False, "best_debt": {}, "best_collateral": {}, "repay_amount": 0}
 
         repay_amount_usd = self.get_optimal_repay_amount(best_debt['value'], best_collateral['value'], incentive_rate)
 
@@ -116,7 +114,8 @@ class Liquidator:
             "is_profitable": net_profit >= 2.0 and slippage_risk_impact < config.MAX_SLIPPAGE_TOLERANCE, # 利润大于 2 刀且滑点风险小于0.02才做
             "best_debt": best_debt,
             "best_collateral": best_collateral,
-            "repay_amount": repay_amount_usd
+            "repay_amount": repay_amount_usd,
+            "net_profit": net_profit
         }
 
     @staticmethod
@@ -127,51 +126,79 @@ class Liquidator:
         # 2. 抵押品限制：不能超过抵押品能赔付的上限 (假设奖励 10%)
         limit_by_collateral = best_collateral_val / incentive_rate
 
-        # 3. 策略限制：比如账户里只有 50 USDT，或者不想在山寨币上冒险
-        my_max_fund = 50.0
-
-        # 4. 取最小值
-        repay_usd = min(limit_by_protocol, limit_by_collateral, my_max_fund)
+        repay_usd = min(limit_by_protocol, limit_by_collateral)
 
         return repay_usd
 
-    def execute_liquidation(self, user_address, repay_amount, vtoken_debt, vtoken_collateral, prices):
+    async def execute_liquidation(self, user_address, repay_amount, vtoken_debt, vtoken_collateral, net_profit, prices):
         try:
             token = self._vtoken_cache[vtoken_debt['v_addr']]
             self.Log.info(f"代偿额度: {repay_amount}, 负债代币价格: {prices[vtoken_debt['v_addr']]}, {token}")
+
+            min_profit_wei = usd_to_wei(2.0, prices[vtoken_collateral['v_addr']], token['oracle_precision'])
+
             repay_amount_wei = usd_to_wei(
                 repay_amount,
                 prices[vtoken_debt['v_addr']],
                 token['oracle_precision'])
 
+            pair_address = self._client.get_pair(vtoken_debt['v_addr'])  # 需确保逻辑能拿到正确的 Pair
+
             try:
-                result = self._client.simulate_liquidation_tx(
+                self._client.simulate_liquidation_tx(
+                    pair_address,
                     user_address,
                     repay_amount_wei,
-                    True if vtoken_debt['symbol'] == 'BNB' else False,
                     vtoken_debt['v_addr'],
-                    vtoken_collateral['v_addr'])
-                if not result:
-                    self.Log.error(f"模拟清算失败")
-                    return
+                    vtoken_collateral['v_addr'],
+                    min_profit_wei
+                )
             except Exception as e:
-                self.Log.error(f"模拟清算 Revert: {e}")
+                self.Log.error(f"⚠️ [模拟失败]: {e}")
                 return
 
-            tx_hash =  self._client.send_liquidation_tx(
-                user_address,
-                repay_amount_wei,
-                True if vtoken_debt['symbol'] == 'BNB' else False,
-                vtoken_debt['v_addr'],
-                vtoken_collateral['v_addr'])
+            async with self._execution_lock:
+                signed_tx = self._client.send_alpha_liquidation_tx(
+                    pair_address,
+                    user_address,
+                    repay_amount_wei,
+                    vtoken_debt['v_addr'],
+                    vtoken_collateral['v_addr'],
+                    min_profit_wei
+                )
+                if net_profit > 50:
+                    try:
+                        response = self._client.send_private_transaction(signed_tx)
+                        if "result" in response:
+                            tx_hash = HexBytes(response["result"])
+                        else:
+                            self.Log.error(f"❌ 私有广播失败: {response}")
+                            return
+                    except Exception as e:
+                        self.Log.error(f"❌ 私有通道请求异常: {e}")
+                        return
+                else:
+                    tx_hash = self._client.send_raw_transaction(signed_tx)
 
-            self.Log.info(f"🚀 清算交易已发出！Hash: {tx_hash.hex()}")
-
-            receipt = self._client.wait_for_transaction_receipt(tx_hash)
-            if receipt['status'] == 1:
-                self.Log.info("✅ 清算成功！")
-            else:
-                self.Log.info("🛑 交易回滚 (Reverted)")
+                self.Log.info(f"🚀 清算交易已发出！Hash: {tx_hash.hex()}")
+            asyncio.create_task(self.check_receipt_status(tx_hash, user_address))
 
         except Exception as e:
-            self.Log.error(f"⚠️ 执行异常: {e}")
+            self.Log.error(f"⚠️ [执行异常]: {e}")
+
+    async def check_receipt_status(self, tx_hash, user_address):
+        try:
+            # 这里的 wait_for_transaction_receipt 建议设置 timeout
+            receipt = await self._client.wait_for_transaction_receipt(tx_hash, timeout=60)
+
+            if receipt['status'] == 1:
+                # 计算实际 Gas 消耗（BNB）
+                gas_used = receipt['gasUsed']
+                gas_price = receipt['effectiveGasPrice']
+                actual_cost = (gas_used * gas_price) / 1e18
+                self.Log.info(f"✅ 清算成功! 用户: {user_address} | 消耗 Gas: {actual_cost:.6f} BNB")
+            else:
+                self.Log.error(f"❌ 交易被回滚 (Reverted): {user_address} | Hash: {tx_hash.hex()}")
+
+        except Exception as e:
+            self.Log.error(f"⚠️ 等待回执超时或出错: {e}")

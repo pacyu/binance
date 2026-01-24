@@ -22,12 +22,26 @@ class Run:
         self._db = RedisClient()
         self._client = VenusClient(config.NODEREAL_RPC_URL, config.VENUS_CORE_COMPTROLLER_ADDR, private_key)
         self.Log = Logger()()
+
+        self._vtoken_cache = {}
+        self._load_vtoken_cache()
+
         self.analyzer = Analyzer(self._client, self._db, self.Log)
-        self.engine = Liquidator(self._client, self._db, self.Log)
+        self.engine = Liquidator(self._client, self._db, self.Log, self.analyzer)
         self._binance_price = {}
         self._event = self._client.get_event()
-        self._task_queue = asyncio.Queue(maxsize=1000)
-        self._last_check = {}
+        self._task_queue = asyncio.Queue(maxsize=2000)
+        self._processing_prices = {}
+        self._processing_users = set()
+
+        self._execution_lock = asyncio.Lock()
+        self.engine.set_execution_lock(self._execution_lock)
+
+    def _load_vtoken_cache(self):
+        all_vtokens = self._db.get_markets('asset:v_addr')
+        for item in all_vtokens:
+            token = json.loads(item)
+            self._vtoken_cache[token['address']] = token
 
     def __call__(self):
         for item in get_realtime_prices():
@@ -47,27 +61,36 @@ class Run:
 
             try:
                 if task["type"] == "user_event":
-                    await self._handle_user_event(task)
+                    asyncio.create_task(self._handle_user_event(task))
 
                 elif task["type"] == "price_update":
-                    await self._handle_price_event(task)
+                    asyncio.create_task(self._handle_price_event(task))
 
             except Exception as e:
-                self.Log.error(f"发生异常: {e}, 任务: {task}")
+                self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}, 任务: {task}")
 
             finally:
                 self._task_queue.task_done()
 
-    async def _handle_user_event(self, event):
-        user = event["user"]
-        await self._process_and_analyze(user)
-
-    async def _handle_price_event(self, event):
-        vtoken = event["vtoken"]
-        if time.time() - self._last_check.get(vtoken, 0) < 2:
+    async def _handle_user_event(self, task):
+        user_addr = task["u_addr"]
+        if user_addr in self._processing_users:
             return
-        self._last_check[vtoken] = time.time()
-        await self._check_opportunity(vtoken)
+        self._processing_users.add(user_addr)
+        try:
+            await self._process_and_analyze(user_addr)
+        finally:
+            self._processing_users.remove(user_addr)
+
+    async def _handle_price_event(self, task):
+        vtoken_addr = task["v_addr"]
+        if vtoken_addr in self._processing_prices or time.time() - self._processing_prices.get(vtoken_addr, 0) < 20:
+            return
+        self._processing_prices[vtoken_addr] = time.time()
+        try:
+            await self._check_opportunity(vtoken_addr)
+        finally:
+            self._processing_prices.pop(vtoken_addr)
 
     async def _check_opportunity(self, vtoken_addr):
         user_address_list = list(self._db.read_by_name(f'asset:users:{vtoken_addr}'))
@@ -95,10 +118,10 @@ class Run:
         topic = log['topics'][0]
 
         if topic == config.TOPICS['Borrow']:
-            # token = self._db.get_vtoken('asset:v_addr', vtoken_addr.lower())
+            # token = self._vtoken_cache[vtoken_addr.lower()]
             # if not token:
-            #     token = self._client.get_vtoken(vtoken_addr.lower())
-            #     self._db.update_venus_vtoken('venus:assets:symbol', token['symbol'], json.dumps(token))
+            #     token = self._client.get_vtoken(vtoken_addr)
+            #     self._db.update_venus_vtoken('venus:assets:symbol', token['symbol'].lower(), json.dumps(token))
             #     self._db.update_venus_vtoken('venus:assets:v_addr', vtoken_addr.lower(), json.dumps(token))
 
             borrow_event = self._event.Borrow()
@@ -111,15 +134,6 @@ class Run:
                           f" | 借款金额: {borrow_amount} | 借款人总债务: {account_borrows}"
                           f" | 市场总债务: {total_borrows} | transactionHash: {log['transactionHash']}")
             return 10, user_addr
-
-        # elif topic == config.TOPICS['Mint']:
-        #     mint_event = self.event.Mint()
-        #     decoded = mint_event.process_log(log)
-        #     user_addr = decoded['args']['minter']
-        #     mint_amount = decoded['args']['mintAmount']
-        #     mint_tokens = decoded['args']['mintTokens']
-        #     self.Log.debug(f"🔥 检测到用户存款事件! 合约地址: {vtoken_addr} | 用户: {user_addr}"
-        #                   f" | 存入资产数量: {mint_amount} | 获得代币数量: {mint_tokens}")
 
         elif topic == config.TOPICS['Redeem']:
             redeem_event = self._event.Redeem()
@@ -214,7 +228,7 @@ class Run:
                                 try:
                                     self._task_queue.put_nowait({
                                         "type": "user_event",
-                                        "user": user_addr,
+                                        "u_addr": user_addr,
                                         "ts": time.time()
                                     })
                                 except asyncio.QueueFull:
@@ -262,7 +276,7 @@ class Run:
                         try:
                             self._task_queue.put_nowait({
                                 "type": "price_update",
-                                "vtoken": vtoken_addr,
+                                "v_addr": vtoken_addr,
                                 "ts": time.time()
                             })
                         except asyncio.QueueFull:

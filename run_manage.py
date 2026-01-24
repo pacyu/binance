@@ -1,5 +1,4 @@
 import config
-import asyncio
 from manager import DataManager
 from web3client import VenusClient
 from redis_client import RedisClient

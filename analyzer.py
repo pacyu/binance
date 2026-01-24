@@ -1,4 +1,3 @@
-import json
 from logging import Logger
 from binance.redis_client import RedisClient
 from binance.web3client import VenusClient
@@ -9,19 +8,17 @@ class Analyzer:
         self._client = client
         self._db = db
         self.Log = logger
-        self._vtoken_cache = {}
-        self._load_vtoken_cache()
+        self._vtoken_cache = None
 
-    def _load_vtoken_cache(self):
-        all_vtokens = self._db.get_markets('asset:v_addr')
-        for item in all_vtokens:
-            token = json.loads(item)
-            self._vtoken_cache[token['address']] = token
+    def set_vtoken_cache(self, vtoken_cache):
+        self._vtoken_cache = vtoken_cache
+
+    def get_vtoken_cache(self):
+        return self._vtoken_cache
 
     def calculate_hf(self, user_profile, prices):
         total_collateral_usd = 0
         total_debt_usd = 0
-        # self.Log.info(f"用户资产: {user_profile}")
         # 从用户持仓细节中提取资产并乘以 prices 里的实时价
         for v_addr, amount in user_profile.items():
             if not prices.get(v_addr):
@@ -38,9 +35,7 @@ class Analyzer:
 
         if total_debt_usd > 0:
             hf = total_collateral_usd / total_debt_usd
-            # self.Log.info(f"用户健康度: {hf}")
             return hf
-        # self.Log.info(f"用户健康度: inf")
         return float('inf')
 
     async def analyze_user(self, user_address, prices):
@@ -56,12 +51,13 @@ class Analyzer:
             self._db.update_user_profile(f"user_profile:{user_address}", user_profile)
 
         hf = self.calculate_hf(user_profile, prices)
+        self.Log.info(f"用户地址: {user_address}, 用户资产: {user_profile}, 健康度: {hf}")
         if hf <= 1.3:
             self._db.update_user_hf_in_order("high_risk_queue", {user_address: hf})
         report = {
             "user_address": user_address,
             "health_factor": hf,
-            "is_liquidatable": 0.92 <= hf <= 0.97,
+            "is_liquidatable": hf < 1.02,
         }
         return report
 

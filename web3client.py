@@ -139,7 +139,8 @@ class VenusClient:
 
     def get_pair(self, address: str) -> str:
         contract = self.get_contract(config.PANCAKE_FACTORY_ADDR, abi.pair_abi)
-        return contract.functions.getPair(self.to_checksum_address(address), self.to_checksum_address(config.USDT_VTOKEN_ADDRESS)).call()
+        return contract.functions.getPair(self.to_checksum_address(address),
+                                          self.to_checksum_address(config.USDT_VTOKEN_ADDRESS)).call()
 
     def get_reserves(self, address: str):
         contract = self.get_contract(address, abi.reserves_abi)
@@ -149,9 +150,6 @@ class VenusClient:
         return reserves, token0, token1
 
     def get_dex_depth_score(self, v_address: str) -> float:
-        if v_address.lower() == config.USDT_VTOKEN_ADDRESS.lower():
-            return 1e99
-
         pair_addr = self.get_pair(v_address)
         if pair_addr == '0x0000000000000000000000000000000000000000':
             return 0.0
@@ -179,17 +177,19 @@ class VenusClient:
 
         # 2. 获取 vToken 信息
         v_symbol = v_contract.functions.symbol().call()
+        underlying_addr = v_contract.functions.underlying().call()
 
         # 3. 特殊处理原生代币 (BNB)
         if v_addr.lower() == "0xa07c5b74c9b40447a954e1466938b865b6bbea36":
             symbol = "BNB"
             underlying_decimal = 18
             is_native = True
+            u_cash = self.get_cash(v_addr)
         else:
-            underlying_addr = v_contract.functions.underlying().call()
             u_contract = self.get_contract(underlying_addr, abi.erc20_abi)
             underlying_decimal = u_contract.functions.decimals().call()
             raw_symbol = u_contract.functions.symbol().call()
+            u_cash = u_contract.functions.getCash().call()
             symbol = raw_symbol.replace(" ", "")  # 某些代币符号带空格
             is_native = False
 
@@ -202,12 +202,18 @@ class VenusClient:
         return {
             "symbol": symbol.lower(),
             "v_symbol": v_symbol,
+            "underlying_address": ('' if is_native else underlying_addr.lower()),
             "address": v_addr.lower(),
             "underlying_decimal": underlying_decimal,
             "cf": cf,
             "is_native": is_native,
             "venus_supported": True,
-            "oracle_precision": 10 ** (36 - underlying_decimal)
+            "oracle_precision": 10 ** (36 - underlying_decimal),
+            "liquidity": {
+                "cash": u_cash / (10 ** underlying_decimal),
+                "dex_depth_score": 1e99 if symbol.lower() in config.MAJOR_TOKENS else self.get_dex_depth_score(v_addr),
+                "is_major": symbol.lower() in config.MAJOR_TOKENS
+            }
         }
 
     async def get_oracle_price(self, vtoken_or_list: List[str]) -> Dict[str, int]:
@@ -253,11 +259,81 @@ class VenusClient:
     #     mantissa = contract.functions.liquidationIncentiveMantissa().call()
     #     return mantissa / 10 ** 18
 
-    def wait_for_transaction_receipt(self, tx_hash) -> TxReceipt:
-        return self._w3.eth.wait_for_transaction_receipt(tx_hash)
+    async def wait_for_transaction_receipt(self, tx_hash, timeout=60) -> TxReceipt:
+        return self._w3.eth.wait_for_transaction_receipt(tx_hash, timeout=timeout)
 
     def get_transaction_count(self) -> int:
         return self._w3.eth.get_transaction_count(self.to_checksum_address(self.account_address), 'pending')
+
+    @staticmethod
+    def send_private_transaction(signed_tx):
+        """
+        通过 BloXroute 或类似服务发送私有交易
+        """
+        # BloXroute 的 BSC 私有 RPC 地址
+        private_rpc = "https://bsc.bloxroute.com/eth"
+
+        # 构造请求头（需要你的 API Key）
+        headers = {
+            "Authorization": config.BLOXROUTE_API_KEY,
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "jsonrpc": "2.0",
+            "method": "eth_sendRawTransaction",
+            "params": [signed_tx.rawTransaction.hex()],
+            "id": 1
+        }
+
+        import requests
+        response = requests.post(private_rpc, json=payload, headers=headers)
+        return response.json()
+
+    def send_alpha_liquidation_tx(self,
+                                  pair_address: str,
+                                  borrower: str,
+                                  amount: int,
+                                  vtoken_debt_address: str,
+                                  vtoken_collateral_address: str,
+                                  min_profit_wei: int) -> HexBytes:
+        """
+        调用我的智能合约发送清算交易。
+
+        :param pair_address: 交易对地址
+        :param borrower: 被清算人的钱包地址
+        :param amount: 你代为偿还的金额 (单位为 Wei)
+        :param vtoken_debt_address: 被清算人欠款的 vToken 合约地址 (如 vUSDT)
+        :param vtoken_collateral_address: 你想拿走的抵押品 vToken 合约地址 (如 vBNB)
+        :param min_profit_wei: 要求的最低利润 (Wei)
+        """
+        if not self.private_key:
+            raise ValueError("Private key is required for sending transactions.")
+
+        alpha_contract = self.get_contract(config.CONTRACT_ADDR, abi.contract_abi)
+
+        nonce = self.get_transaction_count()
+
+        tx = alpha_contract.functions.execute(
+            self.to_checksum_address(pair_address),
+            self.to_checksum_address(borrower),
+            int(amount),
+            self.to_checksum_address(vtoken_debt_address),
+            self.to_checksum_address(vtoken_collateral_address),
+            int(min_profit_wei)
+        ).build_transaction({
+            'from': self.account_address,
+            'nonce': nonce,
+            'gas': 1000000,  # 新合约逻辑复杂，Gas Limit 建议给足
+            'gasPrice': int(self.get_gas_price() * 1.1),
+            'chainId': 56
+        })
+
+        signed_tx = self._w3.eth.account.sign_transaction(tx, self.private_key)
+        return signed_tx
+
+    def send_raw_transaction(self, signed_tx):
+        return self._w3.eth.send_raw_transaction(signed_tx.rawTransaction)
 
     def send_liquidation_tx(self,
                             user_address: str,
@@ -317,54 +393,36 @@ class VenusClient:
         return self._w3.eth.send_raw_transaction(signed_tx.rawTransaction)
 
     def simulate_liquidation_tx(self,
+                                pair_address,
                                 user_address: str,
                                 amount: int,
-                                is_native: bool,
                                 vtoken_debt_address: str,
-                                vtoken_collateral_address: str) -> bool:
+                                vtoken_collateral_address: str,
+                                min_profit_wei: int) -> bool:
         """
         模拟提交清算交易。
 
+        :param pair_address: 交易对地址
         :param user_address: 被清算人的钱包地址
         :param amount: 你代为偿还的金额 (单位为 Wei)
-        :param is_native: 用户欠的币种是否为本位币BNB
         :param vtoken_debt_address: 被清算人欠款的 vToken 合约地址 (如 vUSDT)
         :param vtoken_collateral_address: 你想拿走的抵押品 vToken 合约地址 (如 vBNB)
+        :param min_profit_wei: 要求的最低利润 (Wei)
         :return: bool
         """
-        # 实例化债务代币的 vToken 合约
-        # 如果债务是 BNB，调用 vBNB 合约；如果是其他，调用 vERC20 合约
-        vtoken_contract = self.get_contract(vtoken_debt_address, abi.vtoken)
+        alpha_contract = self.get_contract(config.CONTRACT_ADDR, abi.contract_abi)
 
-        # 准备调用参数
-        # 注意：不同 vToken 的 liquidateBorrow 签名略有不同
-        if is_native:
-            # vBNB.liquidateBorrow(borrower, vTokenCollateral)
-            # 注意：vBNB 清算需要发送 value，但 .call 同样可以模拟这个行为
-            call_function = vtoken_contract.functions.liquidateBorrow(
-                self.to_checksum_address(user_address),
-                self.to_checksum_address(vtoken_collateral_address)
-            )
-            # 模拟时需要带上 value 字段
-            res = call_function.call({
-                'from': self.account_address,
-                'value': amount
-            })
-        else:
-            # vERC20.liquidateBorrow(borrower, repayAmount, vTokenCollateral)
-            call_function = vtoken_contract.functions.liquidateBorrow(
-                self.to_checksum_address(user_address),
-                amount,
-                self.to_checksum_address(vtoken_collateral_address)
-            )
-            res = call_function.call({'from': self.account_address})
-
-        # Venus 的 liquidateBorrow 如果执行成功通常返回 0 (Error.NO_ERROR)
-        # 如果返回非 0 值，说明逻辑错误（如：清算额度超过限制等）
-        if res == 0:
-            return True
-        else:
-            return False
+        # 2. 构造模拟调用 (使用 .call 而非 .transact)
+        # 这会在本地节点/远程节点执行逻辑，但不广播交易，不花 Gas
+        alpha_contract.functions.execute(
+            self.to_checksum_address(pair_address),
+            self.to_checksum_address(user_address),
+            int(amount),
+            self.to_checksum_address(vtoken_debt_address),
+            self.to_checksum_address(vtoken_collateral_address),
+            int(min_profit_wei)
+        ).call({'from': self.account_address})
+        return True
 
     def ensure_unlimited_approval(self, underlying_addr, vtoken_addr, current_nonce):
         """

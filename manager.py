@@ -74,6 +74,7 @@ class DataManager:
 
             if v_addr.lower() == "0xa07c5b74c9b40447a954e1466938b865b6bbea36":
                 vtoken_to_underlying[v_addr] = {"sym": "BNB", "dec": 18, "is_native": True, "v_sym": v_sym, "cf": cf}
+                calls_u.append(Call(v_addr, ['getCash()(uint256)'], [(f"cash_{v_addr}", lambda x: x)]))
             elif u_addr:
                 calls_u.append(Call(u_addr, ['decimals()(uint8)'], [(f"dec_{v_addr}", lambda x: x)]))
                 calls_u.append(Call(u_addr, ['symbol()(string)'], [(f"sym_{v_addr}", lambda x: x)]))
@@ -100,7 +101,7 @@ class DataManager:
                 "oracle_precision": 10 ** (36 - u_dec),
                 "liquidity": {
                     "cash": u_cash,
-                    "dex_depth_score": self._client.get_dex_depth_score(config.BNB_VTOKEN_ADDRESS if info['is_native'] else info["u_addr"]),
+                    "dex_depth_score": 1e99 if u_sym.lower() in config.MAJOR_TOKENS else self._client.get_dex_depth_score(info["u_addr"]),
                     "is_major": u_sym.lower() in config.MAJOR_TOKENS
                 }
             }
