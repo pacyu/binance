@@ -101,7 +101,7 @@ class DataManager:
                 "oracle_precision": 10 ** (36 - u_dec),
                 "liquidity": {
                     "cash": u_cash,
-                    "dex_depth_score": 1e99 if u_sym.lower() in config.MAJOR_TOKENS else self._client.get_dex_depth_score(info["u_addr"]),
+                    "dex_depth_score": 1e7 if u_sym.lower() in config.MAJOR_TOKENS else self._client.get_dex_depth_score(info["u_addr"]),
                     "is_major": u_sym.lower() in config.MAJOR_TOKENS
                 }
             }

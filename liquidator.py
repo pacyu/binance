@@ -15,7 +15,10 @@ class Liquidator:
         self.analyzer = analyzer
         self.incentive_rate = 1.1
         self._execution_lock = None
-        self._vtoken_cache = analyzer.get_vtoken_cache()
+        self._vtoken_cache = None
+
+    def set_vtoken_cache(self, vtoken_cache):
+        self._vtoken_cache = vtoken_cache
 
     def set_execution_lock(self, lock):
         self._execution_lock = lock
@@ -23,13 +26,17 @@ class Liquidator:
     async def handle_liquidation(self, report):
         user_addr = report['user_address']
         user_profile = await self.analyzer.get_user_snapshot(user_addr)
+        if not user_profile:
+            self._db.remove_user_profile(f"user_profile:{user_addr}")
+            return
         prices = await self._client.get_oracle_price(list(user_profile.keys()))
         hf = self.analyzer.calculate_hf(user_profile, prices)
-        if hf < 1.0:
-            liq = await self.is_liquidation(user_profile, prices, self.incentive_rate)
+        if 0.6 < hf < 1.0:
+            liq = await self.is_liquidation(user_addr, user_profile, prices, self.incentive_rate)
             if liq['is_profitable']:
                 await self.execute_liquidation(
                     user_addr, liq['repay_amount'], liq['best_debt'], liq['best_collateral'], liq['net_profit'], prices)
+
         self._db.update_user_profile(f"user_profile:{user_addr}", user_profile)
         self._db.update_user_hf_in_order("high_risk_queue", {user_addr: hf})
 
@@ -53,7 +60,7 @@ class Liquidator:
             if balance < 0:  # 债务
                 debts.append({"v_addr": v_addr, "symbol": token['symbol'], "value": value_usd})
             elif balance > 0:  # 抵押品
-                depth = token['liquidity']['dex_depth_score']
+                depth = token['liquidity']['dex_depth_score'] * 100
                 impact = (value_usd / depth) if depth > 0 else 1.0
 
                 collaterals.append({
@@ -68,20 +75,15 @@ class Liquidator:
         # 排序：债务按价值从大到小
         best_debt = sorted(debts, key=lambda x: x['value'], reverse=True)[0]
 
-        # 首先排除滑点过高的那些抵押品
-        collaterals = [c for c in collaterals if c['slippage_risk_impact'] < config.MAX_SLIPPAGE_TOLERANCE]
-        if not collaterals:
-            return {}, {}
-
         # 排序：抵押品优先选安全范围内的（即避免跟大鳄竞争，同时保证滑点风险不会超出预期）
-        best_collateral = sorted(collaterals, key=lambda x: x['dex_depth_score'])[0]
+        best_collateral = sorted(collaterals, key=lambda x: x['value'], reverse=True)[0]
 
         return best_debt, best_collateral
 
-    async def is_liquidation(self, user_profile, prices, incentive_rate=1.1):
+    async def is_liquidation(self, user_addr, user_profile, prices, incentive_rate=1.1):
         # 1. 当前 Gas 价格 (BSC 约 1-3 gwei)
         gas_price_wei = self._client.get_gas_price()
-        estimated_gas = 800000  # 清算交易通常消耗较多 gas
+        estimated_gas = 1000000  # 清算交易通常消耗较多 gas
         gas_cost_bnb = (gas_price_wei * estimated_gas) / 1e18
 
         bnb_price = await self._client.get_oracle_price([config.BNB_VTOKEN_ADDRESS])
@@ -102,7 +104,9 @@ class Liquidator:
         gross_profit_usd = repay_amount_usd * (incentive_rate - 1)
         net_profit = gross_profit_usd - gas_cost_usd - slippage_loss_usd
 
-        self.Log.info(f"--- ⚖️ 清算决策报告 ---")
+        self.Log.info(f"--- ⚖️ 用户 {user_addr} 清算决策报告 ---")
+        # self.Log.info(f"👜 资产情况: {user_profile}")
+        # self.Log.info(f"{best_debt}, {best_collateral}")
         self.Log.info(f"🔹 待清算金额:  ${repay_amount_usd:.2f} USD")
         self.Log.info(f"💰 理论毛利:    ${gross_profit_usd:.2f} USD")
         self.Log.info(f"⛽ Gas 成本:   ${gas_cost_usd:.2f} USDT (约 {gas_cost_bnb:.8f} BNB)")
@@ -132,18 +136,24 @@ class Liquidator:
 
     async def execute_liquidation(self, user_address, repay_amount, vtoken_debt, vtoken_collateral, net_profit, prices):
         try:
-            token = self._vtoken_cache[vtoken_debt['v_addr']]
-            self.Log.info(f"代偿额度: {repay_amount}, 负债代币价格: {prices[vtoken_debt['v_addr']]}, {token}")
+            debt_token = self._vtoken_cache[vtoken_debt['v_addr']]
+            collateral_token = self._vtoken_cache[vtoken_collateral['v_addr']]
+            self.Log.info(f"🎯 代偿数量: {repay_amount},"
+                          f" 负债代币: {vtoken_debt['symbol'].upper()},"
+                          f" 价格: {prices[vtoken_debt['v_addr']] / debt_token['oracle_precision']}")
+            self.Log.info(f"🥩 抵押品代币: {vtoken_collateral['symbol'].upper()},"
+                          f" 价格: {prices[vtoken_collateral['v_addr']] / collateral_token['oracle_precision']}")
 
-            min_profit_wei = usd_to_wei(2.0, prices[vtoken_collateral['v_addr']], token['oracle_precision'])
+            min_profit_wei = usd_to_wei(2.0, prices[vtoken_collateral['v_addr']], collateral_token['underlying_decimal'])
 
             repay_amount_wei = usd_to_wei(
                 repay_amount,
                 prices[vtoken_debt['v_addr']],
-                token['oracle_precision'])
+                debt_token['underlying_decimal'])
 
-            pair_address = self._client.get_pair(vtoken_debt['v_addr'])  # 需确保逻辑能拿到正确的 Pair
-
+            pair_address = self._client.get_pair(debt_token['underlying_address'], collateral_token['underlying_address'])
+            self.Log.info(f"负债token地址: {debt_token['underlying_address']}, 抵押品地址: {collateral_token['underlying_address']}")
+            self.Log.info(f"交易对地址: {pair_address}")
             try:
                 self._client.simulate_liquidation_tx(
                     pair_address,

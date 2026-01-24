@@ -51,7 +51,6 @@ class Analyzer:
             self._db.update_user_profile(f"user_profile:{user_address}", user_profile)
 
         hf = self.calculate_hf(user_profile, prices)
-        self.Log.info(f"用户地址: {user_address}, 用户资产: {user_profile}, 健康度: {hf}")
         if hf <= 1.3:
             self._db.update_user_hf_in_order("high_risk_queue", {user_address: hf})
         report = {

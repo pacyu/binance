@@ -1,4 +1,5 @@
 WEB3_HTTP_PROVIDER = 'https://bsc-dataseed.binance.org/'
+WEB3_BINANCE_URL = "https://data-seed-prebsc-1-s1.binance.org:8545/"
 ANKR_RPC_URL = "https://rpc.ankr.com/bsc/e1742d0ef375c7aaea14e37dc62551a3ab497cacde500e73382b5e3d9bb801b3"
 NODEREAL_RPC_URL = 'https://bsc-mainnet.nodereal.io/v1/0d1c1bcb6f8440eb8f159ff5837c819c'
 NODEREAL_WSS_URI = 'wss://bsc-mainnet.nodereal.io/ws/v1/0d1c1bcb6f8440eb8f159ff5837c819c'
@@ -22,16 +23,16 @@ PANCAKE_FACTORY_ADDR = "0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73"
 # VENUS_REGISTRY_POOL = '0x9f77609477ac0dc2eccc67673059a97d953e6916'
 DELAY_EVENT = 1
 DELAY_PRICE = 3
-RETRY_DELAY = 30
+RETRY_DELAY = 5
 RETRY_DELAY_EVENT = 1
 RETRY_DELAY_PRICE = 1
 
 MAX_SLIPPAGE_TOLERANCE = 0.02
 
+BLOXROUTE_API_KEY = ""
+
 MAJOR_TOKENS = {
     "bnb",
-    "btcb",
-    "eth",
     "usdt",
     "usdc",
     "busd",

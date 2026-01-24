@@ -137,10 +137,10 @@ class VenusClient:
         v_contract = self.get_contract(v_address, abi.erc20_abi)
         return v_contract.functions.getCash().call()
 
-    def get_pair(self, address: str) -> str:
+    def get_pair(self, address0: str, address1: str) -> str:
         contract = self.get_contract(config.PANCAKE_FACTORY_ADDR, abi.pair_abi)
-        return contract.functions.getPair(self.to_checksum_address(address),
-                                          self.to_checksum_address(config.USDT_VTOKEN_ADDRESS)).call()
+        return contract.functions.getPair(self.to_checksum_address(address0),
+                                          self.to_checksum_address(address1)).call()
 
     def get_reserves(self, address: str):
         contract = self.get_contract(address, abi.reserves_abi)
@@ -150,7 +150,7 @@ class VenusClient:
         return reserves, token0, token1
 
     def get_dex_depth_score(self, v_address: str) -> float:
-        pair_addr = self.get_pair(v_address)
+        pair_addr = self.get_pair(v_address, config.USDT_VTOKEN_ADDRESS)
         if pair_addr == '0x0000000000000000000000000000000000000000':
             return 0.0
 
@@ -211,7 +211,7 @@ class VenusClient:
             "oracle_precision": 10 ** (36 - underlying_decimal),
             "liquidity": {
                 "cash": u_cash / (10 ** underlying_decimal),
-                "dex_depth_score": 1e99 if symbol.lower() in config.MAJOR_TOKENS else self.get_dex_depth_score(v_addr),
+                "dex_depth_score": 1e7 if symbol.lower() in config.MAJOR_TOKENS else self.get_dex_depth_score(v_addr),
                 "is_major": symbol.lower() in config.MAJOR_TOKENS
             }
         }

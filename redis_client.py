@@ -27,6 +27,9 @@ class RedisClient:
     def remove_user_hf_from_high_risk(self, name, user_address):
         self._db.zrem(name, user_address)
 
+    def remove_user_hf_by_score(self, name, x, y):
+        self._db.zremrangebyscore(name, x, y)
+
     def update_user_asset_map_list(self, name, user_address):
         self._db.sadd(name, user_address)
 
@@ -38,6 +41,9 @@ class RedisClient:
 
     def exist_user_profile(self, name):
         return self._db.exists(name)
+
+    def remove_user_profile(self, name):
+        self._db.delete(name)
 
     def update_venus_vtoken(self, name, key, value):
         self._db.hset(name, key, value)

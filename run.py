@@ -35,6 +35,9 @@ class Run:
         self._processing_users = set()
 
         self._execution_lock = asyncio.Lock()
+
+        self.analyzer.set_vtoken_cache(self._vtoken_cache)
+        self.engine.set_vtoken_cache(self._vtoken_cache)
         self.engine.set_execution_lock(self._execution_lock)
 
     def _load_vtoken_cache(self):
@@ -192,14 +195,13 @@ class Run:
 
     async def poll_risk_check(self):
         while True:
-            user_address_list = self._db.get_user_hf_by_score(f'high_risk_queue', 0, 1.3)
+            user_address_list = self._db.get_user_hf_by_score('high_risk_queue', 0, float('inf'))
             for user_addr in user_address_list:
                 risky_report = await self.analyzer.analyze_user(user_addr, self._binance_price)
                 if risky_report['is_liquidatable']:
-                    asyncio.create_task(self.engine.handle_liquidation(risky_report))
-                if risky_report['health_factor'] > 1.2 or risky_report['health_factor'] < 0.6:
-                    self._db.remove_user_hf_from_high_risk('high_risk_queue', user_addr)
-            await asyncio.sleep(60)
+                    await self.engine.handle_liquidation(risky_report)
+            self._db.remove_user_hf_by_score('high_risk_queue', 1.3, float('inf'))
+            await asyncio.sleep(config.RETRY_DELAY)
 
     async def listen_user_events(self):
         subscribe_msg = {
