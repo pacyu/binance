@@ -57,3 +57,25 @@ def usd_to_wei(optimal_usd, oracle_price_mantissa, token_decimals) -> int:
 def price_to_wei(price_str: str) -> int:
     price_decimal = Decimal(price_str)
     return int(price_decimal * Decimal(10 ** 18))
+
+def calc_slippage(amount, r0, r1):
+    price_before = r1 / r0
+    amount_fee = amount * 9975
+    numerator = amount_fee * r1
+    denominator = r0 * 10000 + amount_fee
+    amount_out = numerator / denominator
+    price_after = amount_out / amount
+    slippage = 1 - price_after/price_before
+    return slippage, amount_out
+
+def max_liquidatable_amount(r0, r1, max_slippage, precision):
+    low = 0
+    high = r0 * 0.9
+    while high - low > precision:
+        mid = (low + high) / 2
+        slippage, amount_out = calc_slippage(mid, r0, r1)
+        if slippage > max_slippage:
+            high = mid
+        else:
+            low = mid
+    return low

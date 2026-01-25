@@ -52,7 +52,7 @@ class Run:
                 symbol = item['symbol'].replace('USDT', '').lower()
                 if symbol == 'btc':
                     symbol = 'btcb'
-                vtoken_addr = self._db.get_vtoken('symbol_map', symbol)
+                vtoken_addr = self._db.get_vtoken('asset:symbol_map', symbol)
                 if vtoken_addr:
                     self._binance_price[vtoken_addr] = price_to_wei(item['price'])
         self._binance_price['0xfd5840cd36d94d7229439859c0112a4185bc0255'] = 1e18
@@ -124,8 +124,8 @@ class Run:
             # token = self._vtoken_cache[vtoken_addr.lower()]
             # if not token:
             #     token = self._client.get_vtoken(vtoken_addr)
-            #     self._db.update_venus_vtoken('venus:assets:symbol', token['symbol'].lower(), json.dumps(token))
-            #     self._db.update_venus_vtoken('venus:assets:v_addr', vtoken_addr.lower(), json.dumps(token))
+            #     self._db.update_venus_vtoken('asset:symbol', token['symbol'].lower(), json.dumps(token))
+            #     self._db.update_venus_vtoken('asset:v_addr', vtoken_addr.lower(), json.dumps(token))
 
             borrow_event = self._event.Borrow()
             decoded = borrow_event.process_log(log)
@@ -201,7 +201,7 @@ class Run:
                 if risky_report['is_liquidatable']:
                     await self.engine.handle_liquidation(risky_report)
             self._db.remove_user_hf_by_score('high_risk_queue', 1.3, float('inf'))
-            await asyncio.sleep(config.RETRY_DELAY)
+            await asyncio.sleep(config.POLL_DELAY)
 
     async def listen_user_events(self):
         subscribe_msg = {
@@ -264,7 +264,7 @@ class Run:
                         symbol = data['s'].replace('USDT', '').lower()
                         if symbol == 'btc':
                             symbol = 'btcb'
-                        vtoken_addr = self._db.get_vtoken('symbol_map', symbol)
+                        vtoken_addr = self._db.get_vtoken('asset:symbol_map', symbol)
                         self._binance_price[vtoken_addr] = price_to_wei(data['p'])
 
                         if vtoken_addr == config.BNB_VTOKEN_ADDRESS:

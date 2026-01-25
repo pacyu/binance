@@ -142,27 +142,12 @@ class VenusClient:
         return contract.functions.getPair(self.to_checksum_address(address0),
                                           self.to_checksum_address(address1)).call()
 
-    def get_reserves(self, address: str):
+    def get_reserves(self, address: str) -> Tuple:
         contract = self.get_contract(address, abi.reserves_abi)
         reserves = contract.functions.getReserves().call()
         token0 = contract.functions.token0().call()
         token1 = contract.functions.token1().call()
         return reserves, token0, token1
-
-    def get_dex_depth_score(self, v_address: str) -> float:
-        pair_addr = self.get_pair(v_address, config.USDT_VTOKEN_ADDRESS)
-        if pair_addr == '0x0000000000000000000000000000000000000000':
-            return 0.0
-
-        reserves, token0, token1 = self.get_reserves(pair_addr)
-        if v_address.lower() == token0.lower():
-            usdt_reserve = reserves[0]
-        elif v_address.lower() == token1.lower():
-            usdt_reserve = reserves[1]
-        else:
-            return 0.0
-
-        return usdt_reserve / 1e18
 
     def get_vtoken(self, v_addr: str) -> dict:
         """
@@ -184,12 +169,10 @@ class VenusClient:
             symbol = "BNB"
             underlying_decimal = 18
             is_native = True
-            u_cash = self.get_cash(v_addr)
         else:
             u_contract = self.get_contract(underlying_addr, abi.erc20_abi)
             underlying_decimal = u_contract.functions.decimals().call()
             raw_symbol = u_contract.functions.symbol().call()
-            u_cash = u_contract.functions.getCash().call()
             symbol = raw_symbol.replace(" ", "")  # 某些代币符号带空格
             is_native = False
 
@@ -202,18 +185,13 @@ class VenusClient:
         return {
             "symbol": symbol.lower(),
             "v_symbol": v_symbol,
-            "underlying_address": ('' if is_native else underlying_addr.lower()),
+            "underlying_address": (config.WBNB_VTOKEN_UNDER_ADDRESS if is_native else underlying_addr.lower()),
             "address": v_addr.lower(),
             "underlying_decimal": underlying_decimal,
             "cf": cf,
             "is_native": is_native,
             "venus_supported": True,
             "oracle_precision": 10 ** (36 - underlying_decimal),
-            "liquidity": {
-                "cash": u_cash / (10 ** underlying_decimal),
-                "dex_depth_score": 1e7 if symbol.lower() in config.MAJOR_TOKENS else self.get_dex_depth_score(v_addr),
-                "is_major": symbol.lower() in config.MAJOR_TOKENS
-            }
         }
 
     async def get_oracle_price(self, vtoken_or_list: List[str]) -> Dict[str, int]:

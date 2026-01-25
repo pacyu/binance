@@ -5,18 +5,8 @@ class RedisClient:
         self._db = redis.Redis(host=host, port=port, db=db, decode_responses=True)
 
     def save_users(self, name, address_list):
-        for addr in address_list:
-            self.save_user(name, addr)
-
-    def save_user(self, name, address):
-        self._db.sadd(name, address)
+        self._db.sadd(name, *address_list)
         print(f"保存成功！库内地址数: {self._db.scard(name)}")
-
-    # def update_oracle_price(self, name, item):
-    #     self._db.hset(name, mapping=item)
-
-    # def get_oracle_price(self, name):
-    #     return self._db.hgetall(name)
 
     def update_user_hf_in_order(self, name, item):
         self._db.zadd(name, item)
@@ -45,6 +35,15 @@ class RedisClient:
     def remove_user_profile(self, name):
         self._db.delete(name)
 
+    def update_pair_pool(self, name, item):
+        self._db.hset(name, mapping=item)
+
+    def get_pair(self, name, key):
+        return self._db.hget(name, key)
+
+    def get_pair_pool(self, name):
+        return self._db.hgetall(name)
+
     def update_venus_vtoken(self, name, key, value):
         self._db.hset(name, key, value)
 
@@ -55,10 +54,10 @@ class RedisClient:
         return self._db.smembers(name)
 
     def get_all_symbols(self):
-        return self._db.hvals("vtoken_map")
+        return self._db.hvals("asset:vtoken_map")
 
     def get_all_tokens(self):
-        return self._db.hvals("symbol_map")
+        return self._db.hvals("asset:symbol_map")
 
     def get_tokens_by_symbols(self, name, symbols):
         return self._db.hmget(name, symbols)

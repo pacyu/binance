@@ -74,11 +74,11 @@ class DataManager:
 
             if v_addr.lower() == "0xa07c5b74c9b40447a954e1466938b865b6bbea36":
                 vtoken_to_underlying[v_addr] = {"sym": "BNB", "dec": 18, "is_native": True, "v_sym": v_sym, "cf": cf}
-                calls_u.append(Call(v_addr, ['getCash()(uint256)'], [(f"cash_{v_addr}", lambda x: x)]))
+                # calls_u.append(Call(v_addr, ['getCash()(uint256)'], [(f"cash_{v_addr}", lambda x: x)]))
             elif u_addr:
                 calls_u.append(Call(u_addr, ['decimals()(uint8)'], [(f"dec_{v_addr}", lambda x: x)]))
                 calls_u.append(Call(u_addr, ['symbol()(string)'], [(f"sym_{v_addr}", lambda x: x)]))
-                calls_u.append(Call(v_addr, ['getCash()(uint256)'], [(f"cash_{v_addr}", lambda x: x)]))
+                # calls_u.append(Call(v_addr, ['getCash()(uint256)'], [(f"cash_{v_addr}", lambda x: x)]))
                 vtoken_to_underlying[v_addr] = {"u_addr": u_addr, "is_native": False, "v_sym": v_sym, "cf": cf}
 
         res_u = Multicall(calls_u, _w3=self._client.get_w3())()
@@ -87,28 +87,22 @@ class DataManager:
         for v_addr, info in vtoken_to_underlying.items():
             u_sym = res_u.get(f"sym_{v_addr}", "BNB") if not info['is_native'] else "BNB"
             u_dec = res_u.get(f"dec_{v_addr}", 18) if not info['is_native'] else 18
-            u_cash = res_u.get(f"cash_{v_addr}", 0) / 10 ** u_dec
 
             token_dict = {
                 "symbol": u_sym.lower(),
                 "v_symbol": info['v_sym'],
-                "underlying_address": ('' if info['is_native'] else info["u_addr"].lower()),
+                "underlying_address": (config.WBNB_VTOKEN_UNDER_ADDRESS if info['is_native'] else info["u_addr"].lower()),
                 "address": v_addr.lower(),
                 "underlying_decimal": u_dec,
                 "cf": info['cf'],  # 新增：抵押因子 (如 0.8)
                 "is_native": info['is_native'],
                 "venus_supported": u_sym.lower() in local_symbols_set,
                 "oracle_precision": 10 ** (36 - u_dec),
-                "liquidity": {
-                    "cash": u_cash,
-                    "dex_depth_score": 1e7 if u_sym.lower() in config.MAJOR_TOKENS else self._client.get_dex_depth_score(info["u_addr"]),
-                    "is_major": u_sym.lower() in config.MAJOR_TOKENS
-                }
             }
             self._db.update_venus_vtoken('asset:symbol', u_sym.lower(), json.dumps(token_dict))
             self._db.update_venus_vtoken('asset:v_addr', v_addr.lower(), json.dumps(token_dict))
-            self._db.update_token_to_symbol('vtoken_map', {v_addr.lower(): u_sym.lower()})
-            self._db.update_token_to_symbol('symbol_map', {u_sym.lower(): v_addr.lower()})
+            self._db.update_token_to_symbol('asset:vtoken_map', {v_addr.lower(): u_sym.lower()})
+            self._db.update_token_to_symbol('asset:symbol_map', {u_sym.lower(): v_addr.lower()})
 
     def prepare_environment(self):
         """
@@ -136,5 +130,4 @@ class DataManager:
                     print(f"🎉 额度足够: {allowance}无需授权")
             except Exception as e:
                 print(f"⚠️ 授权失败: {e}")
-
 
