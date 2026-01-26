@@ -1,11 +1,15 @@
 WEB3_HTTP_PROVIDER = 'https://bsc-dataseed.binance.org/'
-WEB3_BINANCE_URL = "https://data-seed-prebsc-1-s1.binance.org:8545/"
-ANKR_RPC_URL = "https://rpc.ankr.com/bsc/e1742d0ef375c7aaea14e37dc62551a3ab497cacde500e73382b5e3d9bb801b3"
-NODEREAL_RPC_URL = 'https://bsc-mainnet.nodereal.io/v1/0d1c1bcb6f8440eb8f159ff5837c819c'
-NODEREAL_WSS_URI = 'wss://bsc-mainnet.nodereal.io/ws/v1/0d1c1bcb6f8440eb8f159ff5837c819c'
-ALCHEMY_BSC_WSS_URI = 'wss://bnb-mainnet.g.alchemy.com/v2/FuLG4La49rlhyWgrZlSDI'
 BSC_WSS_URI = "wss://bsc-rpc.publicnode.com"
+
+WEB3_BINANCE_URL = "https://data-seed-prebsc-1-s1.binance.org:8545/"
 BINANCE_PRICE_WSS_URI = "wss://stream.binance.com:9443/stream?streams="
+
+ANKR_RPC_URL = "https://rpc.ankr.com/bsc/e1742d0ef375c7aaea14e37dc62551a3ab497cacde500e73382b5e3d9bb801b3"
+ANKR_RPC_URL2 = "https://rpc.ankr.com/bsc/7dd405f2eb3ccaf5b967ec8a17d4ad63788c3df585850106619fbb187323bf55"
+NODEREAL_RPC_URL = "https://bsc-mainnet.nodereal.io/v1/0d1c1bcb6f8440eb8f159ff5837c819c"
+NODEREAL_WSS_URI = "wss://bsc-mainnet.nodereal.io/ws/v1/0d1c1bcb6f8440eb8f159ff5837c819c"
+ALCHEMY_BSC_RPC_URL = "https://bnb-mainnet.g.alchemy.com/v2/FuLG4La49rlhyWgrZlSDI"
+ALCHEMY_BSC_WSS_URI = "wss://bnb-mainnet.g.alchemy.com/v2/FuLG4La49rlhyWgrZlSDI"
 
 BNB_VTOKEN_ADDRESS = "0xa07c5b74c9b40447a954e1466938b865b6bbea36"
 WBNB_VTOKEN_UNDER_ADDRESS = "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
@@ -31,8 +35,6 @@ RETRY_DELAY_PRICE = 0
 CLOSE_FACTOR = 0.48
 MAX_SLIPPAGE_TOLERANCE = 0.02
 MIN_PROFIT_TOLERANCE = 2.0
-
-BLOXROUTE_API_KEY = ""
 
 COOLDOWN_TTL_MINUTE = 60
 COOLDOWN_TTL_HOUR = 3600

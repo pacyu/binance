@@ -13,10 +13,11 @@ from typing import List, Dict, Tuple, Optional
 AccountSnapshot = Dict[str, Tuple[int, int, int, int]]
 
 class VenusClient:
-    def __init__(self, rpc_url: str, comptroller_addr: str, private_key: Optional[str]=None):
+    def __init__(self, rpc_url: str, comptroller_addr: str, private_key: Optional[str]=None, bloxroute_api_key: Optional[str]=None):
         self._w3 = Web3(HTTPProvider(rpc_url))
         self.comptroller_addr = comptroller_addr
         self.private_key = private_key
+        self.bloxroute_api_key = bloxroute_api_key
 
         if private_key:
             key = private_key if private_key.startswith("0x") else "0x" + private_key
@@ -243,17 +244,19 @@ class VenusClient:
     def get_transaction_count(self) -> int:
         return self._w3.eth.get_transaction_count(self.to_checksum_address(self.account_address), 'pending')
 
-    @staticmethod
-    def send_private_transaction(signed_tx):
+    def send_private_transaction(self, signed_tx):
         """
         通过 BloXroute 或类似服务发送私有交易
         """
+        if not self.bloxroute_api_key:
+            raise ValueError("BLOXROUTE API key is required for sending transactions.")
+
         # BloXroute 的 BSC 私有 RPC 地址
         private_rpc = "https://bsc.bloxroute.com/eth"
 
         # 构造请求头（需要你的 API Key）
         headers = {
-            "Authorization": config.BLOXROUTE_API_KEY,
+            "Authorization": self.bloxroute_api_key,
             "Content-Type": "application/json"
         }
 

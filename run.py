@@ -19,8 +19,9 @@ class Run:
     def __init__(self):
         load_dotenv()
         private_key = os.getenv('PRIVATE_KEY')
+        bloxroute_api_key = os.getenv('BLOXROUTE_API_KEY')
         self._db = RedisClient()
-        self._client = VenusClient(config.NODEREAL_RPC_URL, config.VENUS_CORE_COMPTROLLER_ADDR, private_key)
+        self._client = VenusClient(config.NODEREAL_RPC_URL, config.VENUS_CORE_COMPTROLLER_ADDR, private_key, bloxroute_api_key)
         self.Log = Logger()()
 
         self._vtoken_cache = {}
