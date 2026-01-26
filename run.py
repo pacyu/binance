@@ -219,13 +219,13 @@ class Run:
         while True:
             try:
                 async with websockets.connect(
-                        config.BSC_WSS_URI, ping_timeout=20, ping_interval=15, close_timeout=10) as ws:
+                        config.BSC_WSS_URI, ping_timeout=30, ping_interval=5, close_timeout=10) as ws:
                     await ws.send(json.dumps(subscribe_msg))
-                    msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
+                    msg = json.loads(await ws.recv())
                     self.Log.info(f"成功订阅全网 Borrow/Redeem/RepayBorrow/LiquidateBorrow/MarketEntered 事件, SubID: {msg['result']}")
                     while True:
                         try:
-                            message = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
+                            message = json.loads(await ws.recv())
                             if "params" in message and "result" in message["params"]:
                                 log = message["params"]["result"]
                                 prior, user_addr = self._process_events_log(log)
@@ -258,12 +258,12 @@ class Run:
             try:
                 async with websockets.connect(
                         config.BINANCE_PRICE_WSS_URI + streams,
-                        ping_timeout=20,
-                        ping_interval=15,
+                        ping_timeout=30,
+                        ping_interval=5,
                         close_timeout=10) as ws:
                     self.Log.info("成功订阅实时 binance 价格更新事件推送")
                     while True:
-                        message = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
+                        message = json.loads(await ws.recv())
                         data = message['data']
                         self.Log.debug(f"💴 代币: {data['s']} | 价格: {data['p']}"
                               f" | 更新时间: {datetime.fromtimestamp(float(data['E']) / 1000).strftime('%Y-%m-%d %H:%M:%S')}")
