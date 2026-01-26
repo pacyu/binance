@@ -219,13 +219,13 @@ class Run:
         while True:
             try:
                 async with websockets.connect(
-                        config.NODEREAL_WSS_URI, ping_timeout=60, ping_interval=30, close_timeout=10) as ws:
+                        config.BSC_WSS_URI, ping_timeout=20, ping_interval=15, close_timeout=10) as ws:
                     await ws.send(json.dumps(subscribe_msg))
-                    msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=60))
+                    msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
                     self.Log.info(f"成功订阅全网 Borrow/Redeem/RepayBorrow/LiquidateBorrow/MarketEntered 事件, SubID: {msg['result']}")
                     while True:
                         try:
-                            message = json.loads(await asyncio.wait_for(ws.recv(), timeout=60))
+                            message = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
                             if "params" in message and "result" in message["params"]:
                                 log = message["params"]["result"]
                                 prior, user_addr = self._process_events_log(log)
@@ -245,9 +245,12 @@ class Run:
                         await asyncio.sleep(config.DELAY_EVENT)
             except (ConnectionClosedError, ConnectionResetError, TimeoutError) as e:
                 self.Log.error(f"监听事件-发生异常: {e}, 异常类型: {type(e)}, 正在重新连接...")
-                retry_delay = min(2 ** config.RETRY_DELAY_EVENT, 60)
+                retry_delay = min(2 ** config.RETRY_DELAY_EVENT, 30)
                 await asyncio.sleep(retry_delay)
-                config.RETRY_DELAY_EVENT += 1
+                if retry_delay < 30:
+                    config.RETRY_DELAY_EVENT += 1
+                else:
+                    config.RETRY_DELAY_EVENT = 0
 
     async def listen_binance_price_updates(self):
         streams = "/".join([f"{t.lower()}usdt@aggTrade" for t in self._db.get_all_symbols()])
@@ -255,12 +258,12 @@ class Run:
             try:
                 async with websockets.connect(
                         config.BINANCE_PRICE_WSS_URI + streams,
-                        ping_timeout=60,
-                        ping_interval=30,
+                        ping_timeout=20,
+                        ping_interval=15,
                         close_timeout=10) as ws:
                     self.Log.info("成功订阅实时 binance 价格更新事件推送")
                     while True:
-                        message = json.loads(await asyncio.wait_for(ws.recv(), timeout=60))
+                        message = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
                         data = message['data']
                         self.Log.debug(f"💴 代币: {data['s']} | 价格: {data['p']}"
                               f" | 更新时间: {datetime.fromtimestamp(float(data['E']) / 1000).strftime('%Y-%m-%d %H:%M:%S')}")
@@ -290,9 +293,12 @@ class Run:
                         await asyncio.sleep(config.DELAY_PRICE)
             except (ConnectionClosedError, ConnectionResetError, TimeoutError) as e:
                 self.Log.error(f"监听价格-发生异常: {e}, 异常类型: {type(e)}, 正在重新连接...")
-                retry_delay = min(2 ** config.RETRY_DELAY_PRICE, 60)
+                retry_delay = min(2 ** config.RETRY_DELAY_PRICE, 30)
                 await asyncio.sleep(retry_delay)
-                config.RETRY_DELAY_PRICE += 1
+                if retry_delay < 30:
+                    config.RETRY_DELAY_PRICE += 1
+                else:
+                    config.RETRY_DELAY_PRICE = 0
 
     async def main(self):
         await asyncio.gather(
