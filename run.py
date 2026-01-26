@@ -256,10 +256,7 @@ class Run:
         while True:
             try:
                 async with websockets.connect(
-                        config.BINANCE_PRICE_WSS_URI + streams,
-                        ping_timeout=120,
-                        ping_interval=5,
-                        close_timeout=10) as ws:
+                        config.BINANCE_PRICE_WSS_URI + streams, ping_timeout=120, ping_interval=5, close_timeout=5) as ws:
                     self.Log.info("成功订阅实时 binance 价格更新事件推送")
                     while True:
                         message = json.loads(await ws.recv())
