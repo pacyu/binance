@@ -25,7 +25,6 @@ class Run:
         self.Log = Logger()()
 
         self._vtoken_cache = {}
-        self._load_vtoken_cache()
 
         self.analyzer = Analyzer(self._client, self._db, self.Log)
         self.engine = Liquidator(self._client, self._db, self.analyzer, self.Log)
@@ -41,8 +40,8 @@ class Run:
         self.engine.set_vtoken_cache(self._vtoken_cache)
         self.engine.set_execution_lock(self._execution_lock)
 
-    def _load_vtoken_cache(self):
-        all_vtokens = self._db.get_markets('asset:v_addr')
+    async def _load_vtoken_cache(self):
+        all_vtokens = await self._db.get_markets('asset:v_addr')
         for item in all_vtokens:
             token = json.loads(item)
             self._vtoken_cache[token['address']] = token
@@ -99,7 +98,7 @@ class Run:
             self._processing_prices.pop(vtoken_addr)
 
     async def _check_opportunity(self, vtoken_addr):
-        user_address_list = list(self._db.read_by_name(f'asset:users:{vtoken_addr}'))
+        user_address_list = list(await self._db.read_by_name(f'asset:users:{vtoken_addr}'))
         
         if not user_address_list:
             return
@@ -198,12 +197,12 @@ class Run:
 
     async def poll_risk_check(self):
         while True:
-            user_address_list = self._db.get_user_hf_by_score('high_risk_queue', 0, float('inf'))
+            user_address_list = await self._db.get_user_hf_by_score('high_risk_queue', 0, float('inf'))
             for user_addr in user_address_list:
                 risky_report = await self.analyzer.analyze_user(user_addr, self._binance_price)
                 if risky_report['is_liquidatable']:
                     await self.engine.handle_liquidation(risky_report)
-            self._db.remove_user_hf_by_score('high_risk_queue', 1.3, float('inf'))
+            await self._db.remove_user_hf_by_score('high_risk_queue', 1.3, float('inf'))
             await asyncio.sleep(config.POLL_DELAY)
 
     async def listen_user_events(self):
@@ -253,7 +252,7 @@ class Run:
                     config.RETRY_DELAY_EVENT = 0
 
     async def listen_binance_price_updates(self):
-        streams = "/".join([f"{t.lower()}usdt@aggTrade" for t in self._db.get_all_symbols()])
+        streams = "/".join([f"{t.lower()}usdt@aggTrade" for t in await self._db.get_all_symbols()])
         while True:
             try:
                 async with websockets.connect(
@@ -270,7 +269,7 @@ class Run:
                         symbol = data['s'].replace('USDT', '').lower()
                         if symbol == 'btc':
                             symbol = 'btcb'
-                        vtoken_addr = self._db.get_vtoken('asset:symbol_map', symbol)
+                        vtoken_addr = await self._db.get_vtoken('asset:symbol_map', symbol)
                         self._binance_price[vtoken_addr] = price_to_wei(data['p'])
 
                         if vtoken_addr == config.BNB_VTOKEN_ADDRESS:
@@ -301,6 +300,7 @@ class Run:
                     config.RETRY_DELAY_PRICE = 0
 
     async def main(self):
+        await self._load_vtoken_cache()
         await asyncio.gather(
             self.poll_risk_check(),
             self.listen_user_events(),

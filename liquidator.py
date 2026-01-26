@@ -1,4 +1,3 @@
-import time
 import asyncio
 import config
 from logging import Logger
@@ -27,12 +26,12 @@ class Liquidator:
 
     async def handle_liquidation(self, report):
         user_addr = report['user_address']
-        if self._db.should_skip(f"liquidator:skip:{user_addr}"):
+        if await self._db.should_skip(f"liquidator:skip:{user_addr}"):
             return
 
         user_profile = await self.analyzer.get_user_snapshot(user_addr)
         if not user_profile:
-            self._db.remove_user_profile(f"user_profile:{user_addr}")
+            await self._db.remove_user_profile(f"user_profile:{user_addr}")
             return
 
         prices = await self._client.get_oracle_price(list(user_profile.keys()))
@@ -46,8 +45,8 @@ class Liquidator:
                 status = await self.execute_liquidation(
                     user_addr, liq['repay_amount'], liq['best_debt'], liq['best_collateral'], liq['net_profit'], prices)
 
-        self._db.update_user_profile(f"user_profile:{user_addr}", user_profile)
-        self._db.update_user_hf_in_order("high_risk_queue", {user_addr: hf})
+        await self._db.update_user_profile(f"user_profile:{user_addr}", user_profile)
+        await self._db.update_user_hf_in_order("high_risk_queue", {user_addr: hf})
 
     def get_slippage(self, pair_addr, v_address, amount):
         reserves, token0, token1 = self._client.get_reserves(pair_addr)
@@ -168,9 +167,9 @@ class Liquidator:
         self.Log.info(f"----------------------")
 
         if net_profit < config.MIN_PROFIT_TOLERANCE:
-            self._db.mark_as_non_liquidable(f"liquidator:skip:{user_addr}", config.COOLDOWN_TTL_DAY, "low_profit")
+            await self._db.mark_as_non_liquidable(f"liquidator:skip:{user_addr}", config.COOLDOWN_TTL_DAY, "low_profit")
         if slippage > config.MAX_SLIPPAGE_TOLERANCE:
-            self._db.mark_as_non_liquidable(f"liquidator:skip:{user_addr}", config.COOLDOWN_TTL_HOUR * 2, "high_slippage_risk")
+            await self._db.mark_as_non_liquidable(f"liquidator:skip:{user_addr}", config.COOLDOWN_TTL_HOUR * 2, "high_slippage_risk")
 
         return {
             "is_profitable": net_profit >= 2.0 and slippage < config.MAX_SLIPPAGE_TOLERANCE, # 利润大于 2 刀且滑点风险小于0.02才做

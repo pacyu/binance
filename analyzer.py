@@ -40,7 +40,7 @@ class Analyzer:
         return float('inf')
 
     async def analyze_user(self, user_address, prices):
-        user_profile = self._db.get_user_profile(f"user_profile:{user_address}")
+        user_profile = await self._db.get_user_profile(f"user_profile:{user_address}")
         if not user_profile:
             user_profile = await self.get_user_snapshot(user_address)
             if not user_profile:
@@ -49,11 +49,11 @@ class Analyzer:
                     "health_factor": 0,
                     "is_liquidatable": False,
                 }
-            self._db.update_user_profile(f"user_profile:{user_address}", user_profile)
+            await self._db.update_user_profile(f"user_profile:{user_address}", user_profile)
 
         hf = self.calculate_hf(user_profile, prices)
         if hf <= 1.3:
-            self._db.update_user_hf_in_order("high_risk_queue", {user_address: hf})
+            await self._db.update_user_hf_in_order("high_risk_queue", {user_address: hf})
         report = {
             "user_address": user_address,
             "health_factor": hf,
@@ -83,7 +83,7 @@ class Analyzer:
 
             if abs(amount) > 1e-9:  # 过滤极小值
                 user_profile[v_addr] = amount
-            self._db.update_user_asset_map_list(f'asset:users:{v_addr}', user_address)
+            await self._db.update_user_asset_map_list(f'asset:users:{v_addr}', user_address)
         return user_profile
 
     async def get_users_snapshot(self, user_address_list):
@@ -111,7 +111,7 @@ class Analyzer:
                     user_profile[user_addr] = {}
                 else:
                     user_profile[user_addr][v_addr] = amount
-            self._db.update_user_asset_map_list(f'asset:users:{v_addr}', user_addr)
+            await self._db.update_user_asset_map_list(f'asset:users:{v_addr}', user_addr)
         return user_profile
 
     async def analyze_liquidable_users(self, user_address_list):
