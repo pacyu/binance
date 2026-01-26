@@ -4,7 +4,7 @@ from binance.web3client import VenusClient
 
 
 class Analyzer:
-    def __init__(self, client: VenusClient, db: RedisClient, logger: Logger):
+    def __init__(self, client: VenusClient, db: RedisClient, logger: Logger=None):
         self._client = client
         self._db = db
         self.Log = logger
@@ -19,14 +19,15 @@ class Analyzer:
     def calculate_hf(self, user_profile, prices):
         total_collateral_usd = 0
         total_debt_usd = 0
-        # 从用户持仓细节中提取资产并乘以 prices 里的实时价
+
         for v_addr, amount in user_profile.items():
-            if not prices.get(v_addr):
-                continue
+            price = prices.get(v_addr)
+            if not price:
+                break
 
             amount = float(amount)
             token = self._vtoken_cache[v_addr]
-            current_price = prices[v_addr] / token['oracle_precision']
+            current_price = price / token['oracle_precision']
             usd_price = amount * current_price
             if amount > 0:
                 total_collateral_usd += usd_price * token['cf']

@@ -20,6 +20,12 @@ class RedisClient:
     def remove_user_hf_by_score(self, name, x, y):
         self._db.zremrangebyscore(name, x, y)
 
+    def should_skip(self, name):
+        return self._db.exists(name)
+
+    def mark_as_non_liquidable(self, name, ttl=600, value=""):
+        self._db.setex(name, ttl, value)
+
     def update_user_asset_map_list(self, name, user_address):
         self._db.sadd(name, user_address)
 

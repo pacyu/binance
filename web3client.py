@@ -378,7 +378,7 @@ class VenusClient:
                                 vtoken_collateral_address: str,
                                 min_profit_wei: int) -> bool:
         """
-        模拟提交清算交易。
+        模拟发送清算交易。
 
         :param pair_address: 交易对地址
         :param user_address: 被清算人的钱包地址
@@ -390,7 +390,6 @@ class VenusClient:
         """
         alpha_contract = self.get_contract(config.CONTRACT_ADDR, abi.contract_abi)
 
-        # 2. 构造模拟调用 (使用 .call 而非 .transact)
         # 这会在本地节点/远程节点执行逻辑，但不广播交易，不花 Gas
         alpha_contract.functions.execute(
             self.to_checksum_address(pair_address),

@@ -66,7 +66,7 @@ def calc_slippage(amount, r0, r1):
     amount_out = numerator / denominator
     price_after = amount_out / amount
     slippage = 1 - price_after/price_before
-    return slippage, amount_out
+    return slippage
 
 def max_liquidatable_amount(r0, r1, max_slippage, precision):
     low = 0

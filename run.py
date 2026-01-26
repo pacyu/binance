@@ -27,7 +27,7 @@ class Run:
         self._load_vtoken_cache()
 
         self.analyzer = Analyzer(self._client, self._db, self.Log)
-        self.engine = Liquidator(self._client, self._db, self.Log, self.analyzer)
+        self.engine = Liquidator(self._client, self._db, self.analyzer, self.Log)
         self._binance_price = {}
         self._event = self._client.get_event()
         self._task_queue = asyncio.Queue(maxsize=2000)
@@ -239,7 +239,7 @@ class Run:
                         except LogTopicError as e:
                             self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}, 日志: {log}")
 
-                        await asyncio.sleep(config.RETRY_DELAY_EVENT)
+                        await asyncio.sleep(config.DELAY_EVENT)
             except (ConnectionClosedError, TimeoutError) as e:
                 self.Log.error(f"监听事件-发生异常: {e}, 异常类型: {type(e)}, 正在重新连接...")
                 retry_delay = min(2 ** config.RETRY_DELAY_EVENT, 60)
