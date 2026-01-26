@@ -43,7 +43,7 @@ class Liquidator:
         if shortfall > 0:
             liq = await self.is_liquidation(user_addr, user_profile, prices, self.incentive_rate)
             if liq['is_profitable']:
-                await self.execute_liquidation(
+                status = await self.execute_liquidation(
                     user_addr, liq['repay_amount'], liq['best_debt'], liq['best_collateral'], liq['net_profit'], prices)
 
         self._db.update_user_profile(f"user_profile:{user_addr}", user_profile)

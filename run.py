@@ -32,7 +32,7 @@ class Run:
         self._event = self._client.get_event()
         self._task_queue = asyncio.Queue(maxsize=2000)
         self._processing_prices = {}
-        self._processing_users = set()
+        self._processing_users = {}
 
         self._execution_lock = asyncio.Lock()
 
@@ -77,17 +77,19 @@ class Run:
 
     async def _handle_user_event(self, task):
         user_addr = task["u_addr"]
-        if user_addr in self._processing_users:
+        if (user_addr in self._processing_users
+                or time.time() - self._processing_users.get(user_addr, 0) < config.COOLDOWN_TTL_MINUTE * 5):
             return
-        self._processing_users.add(user_addr)
+        self._processing_users[user_addr] = time.time()
         try:
             await self._process_and_analyze(user_addr)
         finally:
-            self._processing_users.remove(user_addr)
+            self._processing_users.pop(user_addr)
 
     async def _handle_price_event(self, task):
         vtoken_addr = task["v_addr"]
-        if vtoken_addr in self._processing_prices or time.time() - self._processing_prices.get(vtoken_addr, 0) < 20:
+        if (vtoken_addr in self._processing_prices
+                or time.time() - self._processing_prices.get(vtoken_addr, 0) < 20):
             return
         self._processing_prices[vtoken_addr] = time.time()
         try:
@@ -114,7 +116,7 @@ class Run:
     async def _process_and_analyze(self, user_addr):
         risky_report = await self.analyzer.analyze_user(user_addr.lower(), self._binance_price)
         if risky_report['is_liquidatable']:
-            asyncio.create_task(self.engine.handle_liquidation(risky_report))
+            await self.engine.handle_liquidation(risky_report)
 
     def _process_events_log(self, log):
         vtoken_addr = log['address']
