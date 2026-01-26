@@ -279,12 +279,13 @@ class Run:
                         self._binance_price[vtoken_addr] = price_to_wei(data['p'])
 
                         if vtoken_addr == config.BNB_VTOKEN_ADDRESS:
+                            ex_rate = int(await self._db.get_exchange_rate(f"rate:{vtoken_addr}"))
                             # WBNB
                             self._binance_price['0x6bca74586218db34cdb402295796b79663d816e9'] = self._binance_price[
                                 vtoken_addr]
                             # asBNB
                             self._binance_price['0xcc1db43a06d97f736c7b045aedd03c6707c09bdf'] = self._binance_price[
-                                vtoken_addr] * self._db.get_exchange_rate(f"rate:{vtoken_addr}")
+                                vtoken_addr] * ex_rate
 
                         try:
                             await self._task_queue.put((2, self._prior_counter['price_update'], {
