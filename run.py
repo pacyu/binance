@@ -218,7 +218,7 @@ class Run:
         while True:
             try:
                 async with websockets.connect(
-                        config.BSC_WSS_URI, ping_timeout=60, ping_interval=30, close_timeout=10) as ws:
+                        config.NODEREAL_WSS_URI, ping_timeout=60, ping_interval=30, close_timeout=10) as ws:
                     await ws.send(json.dumps(subscribe_msg))
                     msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=60))
                     self.Log.info(f"成功订阅全网 Borrow/Redeem/RepayBorrow/LiquidateBorrow/MarketEntered 事件, SubID: {msg['result']}")
@@ -242,7 +242,7 @@ class Run:
                             self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}, 日志: {log}")
 
                         await asyncio.sleep(config.DELAY_EVENT)
-            except (ConnectionClosedError, TimeoutError) as e:
+            except (ConnectionClosedError, ConnectionResetError, TimeoutError) as e:
                 self.Log.error(f"监听事件-发生异常: {e}, 异常类型: {type(e)}, 正在重新连接...")
                 retry_delay = min(2 ** config.RETRY_DELAY_EVENT, 60)
                 await asyncio.sleep(retry_delay)
@@ -287,7 +287,7 @@ class Run:
                             self.Log.warning("任务队列达到上限！")
 
                         await asyncio.sleep(config.DELAY_PRICE)
-            except (ConnectionClosedError, TimeoutError) as e:
+            except (ConnectionClosedError, ConnectionResetError, TimeoutError) as e:
                 self.Log.error(f"监听价格-发生异常: {e}, 异常类型: {type(e)}, 正在重新连接...")
                 retry_delay = min(2 ** config.RETRY_DELAY_PRICE, 60)
                 await asyncio.sleep(retry_delay)
