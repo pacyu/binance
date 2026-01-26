@@ -24,7 +24,10 @@ class RedisClient:
         return await self._db.exists(name)
 
     async def mark_as_non_liquidable(self, name, ttl=600, value=""):
-        await self._db.setex(name, ttl, value)
+        await self._db.set(name, value, ex=ttl, nx=True)
+
+    async def update_cooldown_list(self, name, ttl=600):
+        await self._db.set(name, '1', ex=ttl, nx=True)
 
     async def update_user_asset_map_list(self, name, user_address):
         await self._db.sadd(name, user_address)
@@ -41,11 +44,23 @@ class RedisClient:
     async def remove_user_profile(self, name):
         await self._db.delete(name)
 
-    async def update_pair_pool(self, name, item):
-        await self._db.hset(name, mapping=item)
+    async def update_exchange_rate(self, name, value):
+        await self._db.set(name, value)
 
-    async def get_pair(self, name, key):
-        return await self._db.hget(name, key)
+    async def get_exchange_rate(self, name):
+        return await self._db.get(name)
+
+    async def update_pair(self, name, value):
+        await self._db.set(name, value)
+
+    async def get_pair(self, name):
+        return await self._db.get(name)
+
+    async def exist_pair(self, name):
+        return await self._db.exists(name)
+
+    async def remove_pair(self, name):
+        await self._db.delete(name)
 
     async def get_pair_pool(self, name):
         return await self._db.hgetall(name)
@@ -82,15 +97,3 @@ class RedisClient:
 
     async def get_symbol(self, name, key):
         return await self._db.hget(name, key)
-
-    async def set(self, name, value):
-        await self._db.set(name, value)
-        print("保存成功！")
-
-    async def get(self, name):
-        return await self._db.get(name)
-
-
-# if __name__ == "__main__":
-#     controller = RedisClient()
-#     controller.save_user("user_addresses", "0x86055C7ae3719B9ecD6e0fB85dF2CEaE7bfc409C")

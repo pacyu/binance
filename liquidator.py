@@ -43,7 +43,7 @@ class Liquidator:
             liq = await self.is_liquidation(user_addr, user_profile, prices, self.incentive_rate)
             if liq['is_profitable']:
                 status = await self.execute_liquidation(
-                    user_addr, liq['repay_amount'], liq['best_debt'], liq['best_collateral'], liq['net_profit'], prices)
+                    user_addr, liq['pair_address'], liq['repay_amount'], liq['best_debt'], liq['best_collateral'], liq['net_profit'], prices)
 
         await self._db.update_user_profile(f"user_profile:{user_addr}", user_profile)
         await self._db.update_user_hf_in_order("high_risk_queue", {user_addr: hf})
@@ -60,16 +60,17 @@ class Liquidator:
             return 1.0, 0
         return slippage
 
-    def calc_dex_best_slippage(self, amount: int, v_address: str):
+    async def calc_dex_best_slippage(self, amount: int, v_address: str):
         """
         兑换为 token->USDT 或 token->WBNB->USDT
         """
         slippage = 0
-        pair_addr = self._client.get_pair(v_address, config.USDT_VTOKEN_UNDER_ADDRESS)
-        if pair_addr == '0x0000000000000000000000000000000000000000':
+        if await self._db.exist_pair(f"pair:{v_address}:{config.USDT_VTOKEN_UNDER_ADDRESS}"):
+            pair_addr = await self._db.get_pair(f"pair:{v_address}:{config.USDT_VTOKEN_UNDER_ADDRESS}")
+        else:
             for v_addr, s_addr in [(v_address, config.WBNB_VTOKEN_UNDER_ADDRESS),
                                   (config.WBNB_VTOKEN_UNDER_ADDRESS, config.USDT_VTOKEN_UNDER_ADDRESS)]:
-                pair_addr = self._client.get_pair(v_addr, s_addr)
+                pair_addr = await self._db.get_pair(f"pair:{v_addr}:{s_addr}")
                 slip = self.get_slippage(pair_addr, v_address, amount)
                 slippage += slip
             return slippage
@@ -149,7 +150,7 @@ class Liquidator:
         gross_reward_usd = repay_usd * incentive_rate
 
         # 4. 滑点
-        slippage = self.calc_dex_best_slippage(gross_reward_amount, best_collateral['underlying_address'])
+        slippage = await self.calc_dex_best_slippage(gross_reward_amount, best_collateral['underlying_address'])
         slippage_loss_usd = gross_reward_usd * slippage
 
         # 5. 毛利润
@@ -171,15 +172,18 @@ class Liquidator:
         if slippage > config.MAX_SLIPPAGE_TOLERANCE:
             await self._db.mark_as_non_liquidable(f"liquidator:skip:{user_addr}", config.COOLDOWN_TTL_HOUR * 2, "high_slippage_risk")
 
+        pair_address = self._db.get_pair(f"pair:{best_debt['underlying_address']}:{best_collateral['underlying_address']}")
+
         return {
             "is_profitable": net_profit >= 2.0 and slippage < config.MAX_SLIPPAGE_TOLERANCE, # 利润大于 2 刀且滑点风险小于0.02才做
             "best_debt": best_debt,
             "best_collateral": best_collateral,
             "repay_amount": repay_amount,
-            "net_profit": net_profit
+            "net_profit": net_profit,
+            "pair_address": pair_address
         }
 
-    async def execute_liquidation(self, user_address, repay_amount, vtoken_debt, vtoken_collateral, net_profit, prices) -> bool:
+    async def execute_liquidation(self, user_address, pair_address, repay_amount, vtoken_debt, vtoken_collateral, net_profit, prices) -> bool:
         debt_token = self._vtoken_cache[vtoken_debt['v_addr']]
         collateral_token = self._vtoken_cache[vtoken_collateral['v_addr']]
         self.Log.info(f"🎯 代偿数量: {repay_amount},"
@@ -195,7 +199,6 @@ class Liquidator:
             prices[vtoken_debt['v_addr']],
             debt_token['underlying_decimal'])
 
-        pair_address = self._client.get_pair(debt_token['underlying_address'], collateral_token['underlying_address'])
         self.Log.info(f"负债token地址: {debt_token['underlying_address']}, 抵押品地址: {collateral_token['underlying_address']}")
         self.Log.info(f"交易对地址: {pair_address}")
         try:

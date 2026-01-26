@@ -1,6 +1,7 @@
 import json
 import config
 from multicall import Call, Multicall
+from utils import get_binance_symbols
 
 class DataManager:
     def __init__(self, client, db, analyzer):
@@ -8,13 +9,13 @@ class DataManager:
         self._db = db
         self.analyzer = analyzer
 
-    def scan_user_address(self, start_block, end_block):
+    async def scan_user_address(self, start_block, end_block):
         print(f"正在扫描从 {start_block} 到 {end_block} 的链上用户借款日志...")
         user_address_list = self._client.fetch_user_address(start_block, end_block)
-        self._db.set('last_block', end_block)
-        self._db.save_users("user_address_tab", user_address_list)
+        await self._db.set('last_block', end_block)
+        await self._db.save_users("user_address_tab", user_address_list)
 
-    def update_users_profile(self, user_address_list):
+    async def update_users_profile(self, user_address_list):
         print('正在初始化用户画像...')
         user_profiles = self.analyzer.get_users_snapshot(user_address_list)
         for user_address, user_profile in user_profiles.items():
@@ -25,15 +26,16 @@ class DataManager:
                 continue
 
             print(user_profile)
-            prices = self._client.get_oracle_price(list(user_profile.keys()))
+            prices = await self._client.get_oracle_price(list(user_profile.keys()))
             hf = self.analyzer.calculate_hf(user_profile, prices)
-            if hf < 1.2:
-                self._db.update_user_hf_in_order('high_risk_queue', {user_address: hf})
+            if hf < 1.3:
+                await self._db.update_user_hf_in_order('high_risk_queue', {user_address: hf})
             else:
-                self._db.remove_user_hf_from_high_risk('high_risk_queue', user_address)
-            self._db.update_user_profile(f"user_profile:{user_address}", user_profile)
+                await self._db.remove_user_hf_from_high_risk('high_risk_queue', user_address)
+            await self._db.update_user_profile(f"user_profile:{user_address}", user_profile)
 
-    def generate_venus_config(self, symbols):
+    async def update_tokens_profile(self):
+        symbols = get_binance_symbols()
         local_symbols_set = set(s.lower() for s in symbols)
 
         comptroller_abi = [{"inputs": [], "name": "getAllMarkets",
@@ -99,35 +101,21 @@ class DataManager:
                 "venus_supported": u_sym.lower() in local_symbols_set,
                 "oracle_precision": 10 ** (36 - u_dec),
             }
-            self._db.update_venus_vtoken('asset:symbol', u_sym.lower(), json.dumps(token_dict))
-            self._db.update_venus_vtoken('asset:v_addr', v_addr.lower(), json.dumps(token_dict))
-            self._db.update_token_to_symbol('asset:vtoken_map', {v_addr.lower(): u_sym.lower()})
-            self._db.update_token_to_symbol('asset:symbol_map', {u_sym.lower(): v_addr.lower()})
+            await self._db.update_venus_vtoken('asset:symbol', u_sym.lower(), json.dumps(token_dict))
+            await self._db.update_venus_vtoken('asset:v_addr', v_addr.lower(), json.dumps(token_dict))
+            await self._db.update_token_to_symbol('asset:vtoken_map', {v_addr.lower(): u_sym.lower()})
+            await self._db.update_token_to_symbol('asset:symbol_map', {u_sym.lower(): v_addr.lower()})
 
-    def prepare_environment(self):
-        """
-        初始化环境：包括无限授权和余额检查。
-        """
-        # 为了提速，我们可以并发检查，但顺序发送授权交易以避免 Nonce 冲突
-        markets = self._db.get_markets('asset:v_addr')
-        nonce = self._client.get_transaction_count()
+    async def update_pair_address(self):
+        markets = await self._db.get_markets('asset:v_addr')
+        u_address_list = list(map(lambda x: json.loads(x)['underlying_address'], markets))
+        for u_addr in u_address_list:
+            for v_addr in u_address_list:
+                if u_addr != v_addr:
+                    pair_address = self._client.get_pair(u_addr, v_addr)
+                    if pair_address != '0x0000000000000000000000000000000000000000':
+                        await self._db.update_pair(f"pair:{u_addr}:{v_addr}", pair_address)
 
-        for market in markets:
-            market = json.loads(market)
-            if market['symbol'] == 'bnb':
-                continue  # 原生 BNB 不需要 Approve
-
-            try:
-                tx_hash, allowance, new_nonce = self._client.ensure_unlimited_approval(
-                    market['underlying_address'],
-                    market['address'],
-                    nonce
-                )
-                nonce = new_nonce  # 更新 Nonce 供下一个使用
-                if tx_hash:
-                    print(f"⏳ 授权交易已发出 {market['symbol']}, 可用额度:{allowance}, Hash: {tx_hash.hex()}")
-                else:
-                    print(f"🎉 额度足够: {allowance}无需授权")
-            except Exception as e:
-                print(f"⚠️ 授权失败: {e}")
-
+    async def update_exchange_rate(self):
+        bnb_er = self._client.get_exchange_rate(config.BNB_VTOKEN_ADDRESS)
+        await self._db.update_exchange_rate(f'rate:{config.BNB_VTOKEN_ADDRESS}', bnb_er)

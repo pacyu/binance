@@ -30,9 +30,9 @@ class Run:
         self.engine = Liquidator(self._client, self._db, self.analyzer, self.Log)
         self._binance_price = {}
         self._event = self._client.get_event()
-        self._task_queue = asyncio.Queue(maxsize=2000)
-        self._processing_prices = {}
-        self._processing_users = {}
+        self._task_queue = asyncio.PriorityQueue(maxsize=2000)
+
+        self._prior_counter = {'user_event': 0, 'price_update': 0}
 
         self._execution_lock = asyncio.Lock()
 
@@ -60,7 +60,7 @@ class Run:
 
     async def listen_worker(self):
         while True:
-            task = await self._task_queue.get()
+            prior, counter, task = await self._task_queue.get()
 
             try:
                 if task["type"] == "user_event":
@@ -77,25 +77,23 @@ class Run:
 
     async def _handle_user_event(self, task):
         user_addr = task["u_addr"]
-        if (user_addr in self._processing_users
-                or time.time() - self._processing_users.get(user_addr, 0) < config.COOLDOWN_TTL_MINUTE * 5):
-            return
-        self._processing_users[user_addr] = time.time()
-        try:
-            await self._process_and_analyze(user_addr)
-        finally:
-            self._processing_users.pop(user_addr)
+        await self._process_and_analyze(user_addr)
 
     async def _handle_price_event(self, task):
         vtoken_addr = task["v_addr"]
-        if (vtoken_addr in self._processing_prices
-                or time.time() - self._processing_prices.get(vtoken_addr, 0) < 20):
+        symbol = task["symbol"]
+        if await self._db.should_skip(f"cooldown:vtoken:{vtoken_addr}"):
             return
-        self._processing_prices[vtoken_addr] = time.time()
-        try:
-            await self._check_opportunity(vtoken_addr)
-        finally:
-            self._processing_prices.pop(vtoken_addr)
+
+        if symbol in config.MAJOR_COINS:
+            cooldown_ttl = 3
+        elif symbol in config.STABLE_COINS:
+            cooldown_ttl = config.COOLDOWN_TTL_MINUTE
+        else:
+            cooldown_ttl = 5
+
+        await self._db.update_cooldown_list(f"cooldown:vtoken:{vtoken_addr}", cooldown_ttl)
+        await self._check_opportunity(vtoken_addr)
 
     async def _check_opportunity(self, vtoken_addr):
         user_address_list = list(await self._db.read_by_name(f'asset:users:{vtoken_addr}'))
@@ -132,30 +130,36 @@ class Run:
             borrow_event = self._event.Borrow()
             decoded = borrow_event.process_log(log)
             user_addr = decoded['args']['borrower']
+            if user_addr in config.BLACKLIST:
+                return -1, user_addr
             borrow_amount = decoded['args']['borrowAmount'] / 1e18
             account_borrows = decoded['args']['accountBorrows'] / 1e18
             total_borrows = decoded['args']['totalBorrows'] / 1e18
             self.Log.info(f"🔥 检测到用户借款事件! 合约地址: {vtoken_addr} | 借款人: {user_addr}"
                           f" | 借款金额: {borrow_amount} | 借款人总债务: {account_borrows}"
                           f" | 市场总债务: {total_borrows} | transactionHash: {log['transactionHash']}")
-            return 10, user_addr
+            return 1, user_addr
 
         elif topic == config.TOPICS['Redeem']:
             redeem_event = self._event.Redeem()
             decoded = redeem_event.process_log(log)
             user_addr = decoded['args']['redeemer']
+            if user_addr in config.BLACKLIST:
+                return -1, user_addr
             redeem_amount = decoded['args']['redeemAmount'] / 1e18
             redeem_tokens = decoded['args']['redeemTokens'] / 1e18
             self.Log.info(f"🔥 检测到用户赎回事件! 合约地址: {vtoken_addr} | 赎回者: {user_addr}"
                            f" | 赎回资产数量: {redeem_amount} | 销毁vToken数量: {redeem_tokens}"
                            f" | transactionHash: {log['transactionHash']}")
-            return 1, user_addr
+            return 50, user_addr
 
         elif topic == config.TOPICS['RepayBorrow']:
             repay_borrow_event = self._event.RepayBorrow()
             decoded = repay_borrow_event.process_log(log)
             payer_addr = decoded['args']['payer']
             user_addr = decoded['args']['borrower']
+            if user_addr in config.BLACKLIST:
+                return -1, user_addr
             repay_amount = decoded['args']['repayAmount'] / 1e18
             account_borrows_new = decoded['args']['accountBorrowsNew'] / 1e18
             total_borrows_new = decoded['args']['totalBorrowsNew'] / 1e18
@@ -164,13 +168,15 @@ class Run:
                            f" | 借款人新债务: {account_borrows_new}"
                            f" | 市场总债务新值: {total_borrows_new}"
                            f" | transactionHash: {log['transactionHash']}")
-            return 1, user_addr
+            return 50, user_addr
 
         elif topic == config.TOPICS['LiquidateBorrow']:
             liquidate_borrow_event = self._event.LiquidateBorrow()
             decoded = liquidate_borrow_event.process_log(log)
             liquidator_addr = decoded['args']['liquidator']
             user_addr = decoded['args']['borrower']
+            if user_addr in config.BLACKLIST:
+                return -1, user_addr
             repay_amount = decoded['args']['repayAmount'] / 1e18
             vtoken_collateral_addr = decoded['args']['vTokenCollateral']
             seize_tokens = decoded['args']['seizeTokens'] / 1e18
@@ -179,12 +185,14 @@ class Run:
                           f" | 抵押品vToken地址: {vtoken_collateral_addr}"
                           f" | 清算者获得的抵押品vToken数量: {seize_tokens}"
                           f" | transactionHash: {log['transactionHash']}")
-            return 10, user_addr
+            return 50, user_addr
 
         else:
             market_entered_event = self._event.MarketEntered()
             decoded = market_entered_event.process_log(log)
             user_addr = decoded['args']['user']
+            if user_addr in config.BLACKLIST:
+                return -1, user_addr
             market_addr = decoded['args']['market']
             collateral_balance = decoded['args']['collateralBalance'] / 1e18
             borrow_balance = decoded['args']['borrowBalance'] / 1e18
@@ -193,7 +201,7 @@ class Run:
                           f" | 市场地址: {market_addr} | 抵押品数量: {collateral_balance}"
                           f" | 借款数量: {borrow_balance} | 抵押品汇率: {exchange_rate}"
                           f" | transactionHash: {log['transactionHash']}")
-            return 10, user_addr
+            return 1, user_addr
 
     async def poll_risk_check(self):
         while True:
@@ -228,20 +236,21 @@ class Run:
                             if "params" in message and "result" in message["params"]:
                                 log = message["params"]["result"]
                                 prior, user_addr = self._process_events_log(log)
-
+                                if user_addr in config.BLACKLIST:
+                                    continue
                                 try:
-                                    self._task_queue.put_nowait({
+                                    await self._task_queue.put((prior, self._prior_counter['user_event'], {
                                         "type": "user_event",
                                         "u_addr": user_addr,
                                         "ts": time.time()
-                                    })
+                                    }))
+                                    self._prior_counter['user_event'] += 1
                                 except asyncio.QueueFull:
                                     self.Log.warning("任务队列达到上线！")
 
                         except LogTopicError as e:
                             self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}, 日志: {log}")
 
-                        await asyncio.sleep(config.DELAY_EVENT)
             except (ConnectionClosedError, ConnectionResetError, TimeoutError) as e:
                 self.Log.error(f"监听事件-发生异常: {e}, 异常类型: {type(e)}, 正在重新连接...")
                 retry_delay = min(2 ** config.RETRY_DELAY_EVENT, 30)
@@ -275,18 +284,19 @@ class Run:
                                 vtoken_addr]
                             # asBNB
                             self._binance_price['0xcc1db43a06d97f736c7b045aedd03c6707c09bdf'] = self._binance_price[
-                                vtoken_addr] * self._client.get_exchange_rate(vtoken_addr)
+                                vtoken_addr] * self._db.get_exchange_rate(f"rate:{vtoken_addr}")
 
                         try:
-                            self._task_queue.put_nowait({
+                            await self._task_queue.put((2, self._prior_counter['price_update'], {
                                 "type": "price_update",
                                 "v_addr": vtoken_addr,
+                                "symbol": symbol,
                                 "ts": time.time()
-                            })
+                            }))
+                            self._prior_counter['price_update'] += 1
                         except asyncio.QueueFull:
                             self.Log.warning("任务队列达到上限！")
 
-                        await asyncio.sleep(config.DELAY_PRICE)
             except (ConnectionClosedError, ConnectionResetError, TimeoutError) as e:
                 self.Log.error(f"监听价格-发生异常: {e}, 异常类型: {type(e)}, 正在重新连接...")
                 retry_delay = min(2 ** config.RETRY_DELAY_PRICE, 30)
