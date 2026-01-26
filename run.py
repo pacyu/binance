@@ -21,7 +21,7 @@ class Run:
         private_key = os.getenv('PRIVATE_KEY')
         bloxroute_api_key = os.getenv('BLOXROUTE_API_KEY')
         self._db = RedisClient()
-        self._client = VenusClient(config.NODEREAL_RPC_URL, config.VENUS_CORE_COMPTROLLER_ADDR, private_key, bloxroute_api_key)
+        self._client = VenusClient(config.ANKR_RPC_URL, config.VENUS_CORE_COMPTROLLER_ADDR, private_key, bloxroute_api_key)
         self.Log = Logger()()
 
         self._vtoken_cache = {}
@@ -219,7 +219,7 @@ class Run:
         while True:
             try:
                 async with websockets.connect(
-                        config.BSC_WSS_URI, ping_timeout=30, ping_interval=5, close_timeout=10) as ws:
+                        config.BSC_WSS_URI, ping_timeout=120, ping_interval=5, close_timeout=5) as ws:
                     await ws.send(json.dumps(subscribe_msg))
                     msg = json.loads(await ws.recv())
                     self.Log.info(f"成功订阅全网 Borrow/Redeem/RepayBorrow/LiquidateBorrow/MarketEntered 事件, SubID: {msg['result']}")
@@ -258,7 +258,7 @@ class Run:
             try:
                 async with websockets.connect(
                         config.BINANCE_PRICE_WSS_URI + streams,
-                        ping_timeout=30,
+                        ping_timeout=120,
                         ping_interval=5,
                         close_timeout=10) as ws:
                     self.Log.info("成功订阅实时 binance 价格更新事件推送")
@@ -276,10 +276,10 @@ class Run:
                         if vtoken_addr == config.BNB_VTOKEN_ADDRESS:
                             # WBNB
                             self._binance_price['0x6bca74586218db34cdb402295796b79663d816e9'] = self._binance_price[
-                                vtoken_addr] * 1e18
+                                vtoken_addr]
                             # asBNB
                             self._binance_price['0xcc1db43a06d97f736c7b045aedd03c6707c09bdf'] = self._binance_price[
-                                vtoken_addr] * self._client.get_exchange_rate(vtoken_addr) * 1e18
+                                vtoken_addr] * self._client.get_exchange_rate(vtoken_addr)
 
                         try:
                             self._task_queue.put_nowait({
