@@ -269,7 +269,7 @@ class Run:
                         last_price = self._binance_price.get(vtoken_addr, 0)
                         current_price = price_to_wei(data['p'])
                         fluctuation = 1 - last_price / current_price
-                        if abs(fluctuation) >= get_price_volatility_threshold(current_price):
+                        if abs(fluctuation) >= get_price_volatility_threshold(last_price):
                             self.Log.info(f"💴 代币: {data['s']} | 价格: {data['p']} | 价格涨跌: {fluctuation * 100:.4f}%")
                             try:
                                 await self._task_queue.put((2, self._prior_counter['price_update'], {
