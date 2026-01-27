@@ -25,10 +25,10 @@ class Run:
         self.Log = Logger()()
 
         self._vtoken_cache = {}
+        self._binance_price = {}
 
         self.analyzer = Analyzer(self._client, self._db, self.Log)
         self.engine = Liquidator(self._client, self._db, self.analyzer, self.Log)
-        self._binance_price = {}
         self._event = self._client.get_event()
         self._task_queue = asyncio.PriorityQueue(maxsize=2000)
 
@@ -40,22 +40,24 @@ class Run:
         self.engine.set_vtoken_cache(self._vtoken_cache)
         self.engine.set_execution_lock(self._execution_lock)
 
-    async def _load_vtoken_cache(self):
+    async def _load_vtoken_cache_(self):
         all_vtokens = await self._db.get_markets('asset:v_addr')
         for item in all_vtokens:
             token = json.loads(item)
             self._vtoken_cache[token['address']] = token
 
-    def __call__(self):
+    async def _init_price_(self):
         for item in get_realtime_prices():
             if item['symbol'].endswith('USDT'):
                 symbol = item['symbol'].replace('USDT', '').lower()
                 if symbol == 'btc':
                     symbol = 'btcb'
-                vtoken_addr = self._db.get_vtoken('asset:symbol_map', symbol)
+                vtoken_addr = await self._db.get_vtoken('asset:symbol_map', symbol)
                 if vtoken_addr:
                     self._binance_price[vtoken_addr] = price_to_wei(item['price'])
         self._binance_price['0xfd5840cd36d94d7229439859c0112a4185bc0255'] = 1e18
+
+    def __call__(self):
         asyncio.run(self.main())
 
     async def listen_worker(self):
@@ -81,18 +83,6 @@ class Run:
 
     async def _handle_price_event(self, task):
         vtoken_addr = task["v_addr"]
-        symbol = task["symbol"]
-        if await self._db.should_skip(f"cooldown:vtoken:{vtoken_addr}"):
-            return
-
-        if symbol in config.MAJOR_COINS:
-            cooldown_ttl = 3
-        elif symbol in config.STABLE_COINS:
-            cooldown_ttl = config.COOLDOWN_TTL_MINUTE
-        else:
-            cooldown_ttl = 5
-
-        await self._db.update_cooldown_list(f"cooldown:vtoken:{vtoken_addr}", cooldown_ttl)
         await self._check_opportunity(vtoken_addr)
 
     async def _check_opportunity(self, vtoken_addr):
@@ -270,13 +260,29 @@ class Run:
                     while True:
                         message = json.loads(await ws.recv())
                         data = message['data']
-                        self.Log.debug(f"💴 代币: {data['s']} | 价格: {data['p']}"
-                              f" | 更新时间: {datetime.fromtimestamp(float(data['E']) / 1000).strftime('%Y-%m-%d %H:%M:%S')}")
+
                         symbol = data['s'].replace('USDT', '').lower()
                         if symbol == 'btc':
                             symbol = 'btcb'
+
                         vtoken_addr = await self._db.get_vtoken('asset:symbol_map', symbol)
-                        self._binance_price[vtoken_addr] = price_to_wei(data['p'])
+
+                        last_price = self._binance_price.get(vtoken_addr, 0)
+                        current_price = price_to_wei(data['p'])
+                        fluctuation = 1 - last_price / current_price
+                        if abs(fluctuation) >= config.PRICE_VOLATILITY_THRESHOLD:
+                            self.Log.info(f"💴 代币: {data['s']} | 价格: {data['p']} | 价格涨幅度: {fluctuation * 100}%")
+                            try:
+                                await self._task_queue.put((2, self._prior_counter['price_update'], {
+                                    "type": "price_update",
+                                    "v_addr": vtoken_addr,
+                                    "ts": time.time()
+                                }))
+                                self._prior_counter['price_update'] += 1
+                            except asyncio.QueueFull:
+                                self.Log.warning("任务队列达到上限！")
+
+                        self._binance_price[vtoken_addr] = current_price
 
                         if vtoken_addr == config.BNB_VTOKEN_ADDRESS:
                             ex_rate = int(await self._db.get_exchange_rate(f"rate:{vtoken_addr}"))
@@ -286,17 +292,6 @@ class Run:
                             # asBNB
                             self._binance_price['0xcc1db43a06d97f736c7b045aedd03c6707c09bdf'] = self._binance_price[
                                 vtoken_addr] * ex_rate
-
-                        try:
-                            await self._task_queue.put((2, self._prior_counter['price_update'], {
-                                "type": "price_update",
-                                "v_addr": vtoken_addr,
-                                "symbol": symbol,
-                                "ts": time.time()
-                            }))
-                            self._prior_counter['price_update'] += 1
-                        except asyncio.QueueFull:
-                            self.Log.warning("任务队列达到上限！")
 
             except (ConnectionClosedError, ConnectionResetError, TimeoutError) as e:
                 self.Log.error(f"监听价格-发生异常: {e}, 异常类型: {type(e)}, 正在重新连接...")
@@ -308,7 +303,9 @@ class Run:
                     config.RETRY_DELAY_PRICE = 0
 
     async def main(self):
-        await self._load_vtoken_cache()
+        await self._load_vtoken_cache_()
+        await self._init_price_()
+
         await asyncio.gather(
             self.poll_risk_check(),
             self.listen_user_events(),
