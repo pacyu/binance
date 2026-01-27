@@ -12,7 +12,7 @@ from liquidator import Liquidator
 from redis_client import RedisClient
 from web3.exceptions import LogTopicError
 from websockets.exceptions import ConnectionClosedError
-from utils import price_to_wei, get_realtime_prices
+from utils import price_to_wei, get_realtime_prices, get_price_volatility_threshold
 
 class Run:
     def __init__(self):
@@ -269,7 +269,7 @@ class Run:
                         last_price = self._binance_price.get(vtoken_addr, 0)
                         current_price = price_to_wei(data['p'])
                         fluctuation = 1 - last_price / current_price
-                        if abs(fluctuation) >= config.PRICE_VOLATILITY_THRESHOLD:
+                        if abs(fluctuation) >= get_price_volatility_threshold(current_price):
                             self.Log.info(f"💴 代币: {data['s']} | 价格: {data['p']} | 价格涨跌: {fluctuation * 100:.4f}%")
                             try:
                                 await self._task_queue.put((2, self._prior_counter['price_update'], {

@@ -42,33 +42,8 @@ COOLDOWN_TTL_MINUTE = 60
 COOLDOWN_TTL_HOUR = 3600
 COOLDOWN_TTL_DAY = 3600 * 24
 
-MAJOR_COINS = [
-    "bnb",
-    "btc",
-    "eth",
-    "sol",
-    "xrp",
-    "ada",
-    "doge"
-]
-
-STABLE_COINS = [
-    "usdt",
-    "usdc",
-    "busd",
-    "fdusd",
-    "dai"
-]
-
 BLACKLIST = [
     "0x76eDB2236c9b58e45AB0B4bC5c462F6F1e52827D"
-]
-
-DEX_DEPTH_THRESHOLDS = [
-    (0.005, 1.0),   # <0.5% → 极好
-    (0.01, 0.7),    # <1%
-    (0.02, 0.3),    # <2%
-    (1.00, 0.0),    # >2% → 不可用
 ]
 
 TOPICS = {
@@ -78,6 +53,4 @@ TOPICS = {
     "Redeem": "0xe5b754fb1abb7f01b499791d0b820ae3b6af3424ac1c59768edb53f4ec31a929",
     "LiquidateBorrow": "0x298637f684da70674f26509b10f07ec2fbc77a335ab1e7d6215a4b2484d8bb52",
     "RepayBorrow": "0x1a2a22cb034d26d1854bdc6666a5b91fe25efbbb5dcad3b0355478d6f5c362a1",
-    # "Transfer": "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
-    # "PriceUpdated": "0xb556fac599c3c70efb9ab1fa725ecace6c81cc48d1455f886607def065f3e0c0"
 }
