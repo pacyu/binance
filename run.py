@@ -5,7 +5,6 @@ import asyncio
 import config
 import websockets
 from logger import Logger
-from datetime import datetime
 from dotenv import load_dotenv
 from web3client import VenusClient
 from analyzer import Analyzer
