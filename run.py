@@ -30,7 +30,7 @@ class Run:
         self.engine = Liquidator(self._client, self._db, self.analyzer, self.Log)
         self._event = self._client.get_event()
         self._task_queue = asyncio.PriorityQueue(maxsize=2000)
-
+        self._pending_users = set()
         self._prior_counter = {'user_event': 0, 'price_update': 0}
 
         self._execution_lock = asyncio.Lock()
@@ -79,6 +79,7 @@ class Run:
     async def _handle_user_event(self, task):
         user_addr = task["u_addr"]
         await self._process_and_analyze(user_addr)
+        self._pending_users.remove(user_addr)
 
     async def _handle_price_event(self, task):
         vtoken_addr = task["v_addr"]
@@ -225,8 +226,9 @@ class Run:
                             if "params" in message and "result" in message["params"]:
                                 log = message["params"]["result"]
                                 prior, user_addr = self._process_events_log(log)
-                                if user_addr in config.BLACKLIST:
+                                if user_addr in config.BLACKLIST or user_addr in self._pending_users:
                                     continue
+                                self._pending_users.add(user_addr)
                                 try:
                                     await self._task_queue.put((prior, self._prior_counter['user_event'], {
                                         "type": "user_event",
