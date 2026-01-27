@@ -83,7 +83,7 @@ def max_liquidatable_amount(r0, r1, max_slippage, precision):
 def get_price_volatility_threshold(current_price: float) -> float:
     # 针对高价资产（BNB/BTC/ETH）
     if current_price >= 800 * 1e18:
-        return 0.00001  # 十万分之一 (0.001%)
+        return 0.00002  # 十万分之二 (0.002%)
 
     elif current_price >= 500 * 1e18:
         return 0.0001  # 万分之一 (0.01%)

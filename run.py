@@ -103,6 +103,8 @@ class Run:
 
     async def _process_and_analyze(self, user_addr):
         risky_report = await self.analyzer.analyze_user(user_addr.lower(), self._binance_price)
+        self.Log.info(f"用户事件触发: {user_addr}")
+        self.Log.info(f"分析报告: {risky_report}")
         if risky_report['is_liquidatable']:
             await self.engine.handle_liquidation(risky_report)
 
