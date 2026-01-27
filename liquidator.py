@@ -95,7 +95,13 @@ class Liquidator:
             value_usd = abs(amount) * current_price
 
             if amount < 0: # 债务
-                debts.append({"v_addr": v_addr, "symbol": token['symbol'], "value": value_usd, "amount": abs(amount)})
+                debts.append({
+                    "v_addr": v_addr,
+                    "underlying_address": token['underlying_address'],
+                    "symbol": token['symbol'],
+                    "value": value_usd,
+                    "amount": abs(amount)
+                })
             elif amount > 0: # 抵押品
                 collaterals.append({
                     "v_addr": v_addr,
