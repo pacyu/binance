@@ -270,7 +270,7 @@ class Run:
                         current_price = price_to_wei(data['p'])
                         fluctuation = 1 - last_price / current_price
                         if abs(fluctuation) >= config.PRICE_VOLATILITY_THRESHOLD:
-                            self.Log.info(f"💴 代币: {data['s']} | 价格: {data['p']} | 价格涨跌: {fluctuation * 100}%")
+                            self.Log.info(f"💴 代币: {data['s']} | 价格: {data['p']} | 价格涨跌: {fluctuation * 100:.4f}%")
                             try:
                                 await self._task_queue.put((2, self._prior_counter['price_update'], {
                                     "type": "price_update",
