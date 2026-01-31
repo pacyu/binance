@@ -42,14 +42,14 @@ comptroller = [{
     "stateMutability": "view",
     "type": "function"
 }]
-# incentive_mantissa_abi = [{
-#     "constant":True,
-#     "inputs":[],
-#     "name":"liquidationIncentiveMantissa",
-#     "outputs":[{"internalType":"uint256","name":"","type":"uint256"}],
-#     "stateMutability":"view",
-#     "type":"function"
-# }]
+incentive_mantissa_abi = [{
+    "constant":True,
+    "inputs":[],
+    "name":"liquidationIncentiveMantissa",
+    "outputs":[{"internalType":"uint256","name":"","type":"uint256"}],
+    "stateMutability":"view",
+    "type":"function"
+}]
 exchange_rate_abi = [{
     "constant":True,
     "inputs":[],
@@ -101,16 +101,6 @@ venus_oracle = [{
     "type": "function"
 }]
 event_abi = [
-    # {
-    #     "anonymous": False,
-    #     "inputs": [
-    #         {"indexed": True, "internalType": "address", "name": "minter", "type": "address"},
-    #         {"indexed": False, "internalType": "uint256", "name": "mintAmount", "type": "uint256"},
-    #         {"indexed": False, "internalType": "uint256", "name": "mintTokens", "type": "uint256"}
-    #     ],
-    #     "name": "Mint",
-    #     "type": "event"
-    # },
     {
     "anonymous": False,
     "inputs": [
@@ -157,12 +147,33 @@ event_abi = [
     'inputs': [
         {'type': 'address', 'name': 'user', 'indexed': False}, # 实际进入市场的用户账户
         {'type': 'address', 'name': 'market', 'indexed': False}, # 进入的vToken市场地址
-        {'type': 'uint256', 'name': 'collateralBalance', 'indexed': False}, # 抵押品余额
-        {'type': 'uint256', 'name': 'borrowBalance', 'indexed': False}, # 借款余额
-        {'type': 'uint256', 'name': 'exchangeRate', 'indexed': False}, # 汇率
     ],
     'name': 'MarketEntered',
     'type': 'event'
+},{
+    "anonymous": False,
+    "inputs": [
+        {"indexed": False, "internalType": "int256", "name": "current","type": "int256"},
+        {"indexed": False, "internalType": "uint256", "name": "roundId","type": "uint256"},
+        {"indexed": False, "internalType": "uint256", "name": "updatedAt", "type": "uint256"}
+    ],
+    "name": "AnswerUpdated",
+    "type": "event"
+},{
+    "anonymous": False,
+    "inputs": [
+        {"indexed": True, "internalType": "uint32", "name": "aggregatorRoundId", "type": "uint32"},
+        {"indexed": False, "internalType": "int192", "name": "answer", "type": "int192"},
+        {"indexed": False, "internalType": "address", "name": "transmitter", "type": "address"},
+        {"indexed": False, "internalType": "uint32", "name": "observationsTimestamp", "type": "uint32"},
+        {"indexed": False, "internalType": "int192[]", "name": "observations", "type": "int192[]"},
+        {"indexed": False, "internalType": "bytes", "name": "observers", "type": "bytes"},
+        {"indexed": False, "internalType": "int192", "name": "juelsPerFeeCoin", "type": "int192"},
+        {"indexed": False, "internalType": "bytes32", "name": "configDigest", "type": "bytes32"},
+        {"indexed": False, "internalType": "uint40", "name": "epochAndRound", "type": "uint40"}
+    ],
+    "name": "NewTransmission",
+    "type": "event"
 }]
 erc20_abi = [
     {
@@ -254,7 +265,20 @@ reserves_abi = [
         "type": "function",
     },
 ]
-
+router_abi = [
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "amountOut", "type": "uint256"},
+            {"internalType": "address[]", "name": "path", "type": "address[]"}
+        ],
+        "name": "getAmountsIn",
+        "outputs": [
+            {"internalType": "uint256[]", "name": "amounts", "type": "uint256[]"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    }
+]
 contract_abi = [
   {
     "type": "constructor",

@@ -4,6 +4,7 @@ import time
 import asyncio
 import config
 import websockets
+from eth_abi import abi
 from logger import Logger
 from dotenv import load_dotenv
 from web3client import VenusClient
@@ -19,16 +20,22 @@ class Run:
         load_dotenv()
         private_key = os.getenv('PRIVATE_KEY')
         bloxroute_api_key = os.getenv('BLOXROUTE_API_KEY')
+        bloxroute_auth_header = os.getenv('BLOXROUTE_AUTH_HEADER')
         self._db = RedisClient()
-        self._client = VenusClient(config.ANKR_RPC_URL, config.VENUS_CORE_COMPTROLLER_ADDR, private_key, bloxroute_api_key)
+        self._client = VenusClient(config.ANKR_RPC_URL,
+                                   config.VENUS_CORE_COMPTROLLER_ADDR,
+                                   private_key,
+                                   bloxroute_api_key,
+                                   bloxroute_auth_header)
         self.Log = Logger()()
 
         self._vtoken_cache = {}
         self._binance_price = {}
+        self._onchain_price = {}
 
         self.analyzer = Analyzer(self._client, self._db, self.Log)
         self.engine = Liquidator(self._client, self._db, self.analyzer, self.Log)
-        self._event = self._client.get_event()
+        self._event = None
         self._task_queue = asyncio.PriorityQueue(maxsize=2000)
         self._pending_users = set()
         self._prior_counter = {'user_event': 0, 'price_update': 0}
@@ -55,6 +62,7 @@ class Run:
                 if vtoken_addr:
                     self._binance_price[vtoken_addr] = price_to_wei(item['price'])
         self._binance_price['0xfd5840cd36d94d7229439859c0112a4185bc0255'] = 1e18
+        self._onchain_price = await self._client.get_oracle_price(await self._db.get_all_tokens())
 
     def __call__(self):
         asyncio.run(self.main())
@@ -68,7 +76,10 @@ class Run:
                     asyncio.create_task(self._handle_user_event(task))
 
                 elif task["type"] == "price_update":
-                    asyncio.create_task(self._handle_price_event(task))
+                    asyncio.create_task(self._handle_price_update(task))
+
+                elif task["type"] == "oracle_update":
+                    asyncio.create_task(self._handle_oracle_update(task))
 
             except Exception as e:
                 self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}, 任务: {task}")
@@ -77,24 +88,28 @@ class Run:
                 self._task_queue.task_done()
 
     async def _handle_user_event(self, task):
-        user_addr = task["u_addr"]
+        user_addr = task["address"]
         await self._process_and_analyze(user_addr)
         self._pending_users.remove(user_addr)
 
-    async def _handle_price_event(self, task):
-        vtoken_addr = task["v_addr"]
-        await self._check_opportunity(vtoken_addr)
+    async def _handle_price_update(self, task):
+        vtoken_addr = task["address"]
+        await self._check_opportunity(vtoken_addr, self._binance_price)
 
-    async def _check_opportunity(self, vtoken_addr):
+    async def _handle_oracle_update(self, task):
+        tx_hash = task["tx_hash"]
+        await self._process_transaction(tx_hash)
+
+    async def _check_opportunity(self, vtoken_addr, prices, oracle_tx_hash: str=None):
         user_address_list = list(await self._db.read_by_name(f'asset:users:{vtoken_addr}'))
         
         if not user_address_list:
             return
 
         async def _process_user(u_addr):
-            risky_report = await self.analyzer.analyze_user(u_addr, self._binance_price)
+            risky_report = await self.analyzer.analyze_user(u_addr, prices)
             if risky_report['is_liquidatable']:
-                await self.engine.handle_liquidation(risky_report)
+                await self.engine.handle_liquidation(risky_report, oracle_tx_hash)
 
         batch_size = 20
         for i in range(0, len(user_address_list), batch_size):
@@ -107,6 +122,14 @@ class Run:
         self.Log.info(f"分析报告: {risky_report}")
         if risky_report['is_liquidatable']:
             await self.engine.handle_liquidation(risky_report)
+
+    async def _process_transaction(self, tx_hash):
+        tx = await self._client.get_transaction(tx_hash)
+        oracle_address = tx['to']
+        if await self._db.exist_oracle_source(f"oracle:address:{oracle_address}"):
+            result = await self._db.get_oracle_source(f"oracle:address:{oracle_address}")
+            for v_addr in result:
+                await self._check_opportunity(v_addr, self._onchain_price, tx_hash)
 
     def _process_events_log(self, log):
         vtoken_addr = log['address']
@@ -123,7 +146,7 @@ class Run:
             decoded = borrow_event.process_log(log)
             user_addr = decoded['args']['borrower']
             if user_addr in config.BLACKLIST:
-                return -1, user_addr
+                return None
             borrow_amount = decoded['args']['borrowAmount'] / 1e18
             account_borrows = decoded['args']['accountBorrows'] / 1e18
             total_borrows = decoded['args']['totalBorrows'] / 1e18
@@ -137,7 +160,7 @@ class Run:
             decoded = redeem_event.process_log(log)
             user_addr = decoded['args']['redeemer']
             if user_addr in config.BLACKLIST:
-                return -1, user_addr
+                return None
             redeem_amount = decoded['args']['redeemAmount'] / 1e18
             redeem_tokens = decoded['args']['redeemTokens'] / 1e18
             self.Log.info(f"🔥 检测到用户赎回事件! 合约地址: {vtoken_addr} | 赎回者: {user_addr}"
@@ -151,7 +174,7 @@ class Run:
             payer_addr = decoded['args']['payer']
             user_addr = decoded['args']['borrower']
             if user_addr in config.BLACKLIST:
-                return -1, user_addr
+                return None
             repay_amount = decoded['args']['repayAmount'] / 1e18
             account_borrows_new = decoded['args']['accountBorrowsNew'] / 1e18
             total_borrows_new = decoded['args']['totalBorrowsNew'] / 1e18
@@ -168,7 +191,7 @@ class Run:
             liquidator_addr = decoded['args']['liquidator']
             user_addr = decoded['args']['borrower']
             if user_addr in config.BLACKLIST:
-                return -1, user_addr
+                return None
             repay_amount = decoded['args']['repayAmount'] / 1e18
             vtoken_collateral_addr = decoded['args']['vTokenCollateral']
             seize_tokens = decoded['args']['seizeTokens'] / 1e18
@@ -184,15 +207,10 @@ class Run:
             decoded = market_entered_event.process_log(log)
             user_addr = decoded['args']['user']
             if user_addr in config.BLACKLIST:
-                return -1, user_addr
+                return None
             market_addr = decoded['args']['market']
-            collateral_balance = decoded['args']['collateralBalance'] / 1e18
-            borrow_balance = decoded['args']['borrowBalance'] / 1e18
-            exchange_rate = decoded['args']['exchangeRate'] / 1e18
             self.Log.info(f"🔥 检测到用户抵押事件! 合约地址: {vtoken_addr} | 用户: {user_addr}"
-                          f" | 市场地址: {market_addr} | 抵押品数量: {collateral_balance}"
-                          f" | 借款数量: {borrow_balance} | 抵押品汇率: {exchange_rate}"
-                          f" | transactionHash: {log['transactionHash']}")
+                          f" | 市场地址: {market_addr} | transactionHash: {log['transactionHash']}")
             return 1, user_addr
 
     async def poll_risk_check(self):
@@ -221,20 +239,23 @@ class Run:
                         config.BSC_WSS_URI, ping_timeout=120, ping_interval=5, close_timeout=5) as ws:
                     await ws.send(json.dumps(subscribe_msg))
                     msg = json.loads(await ws.recv())
-                    self.Log.info(f"成功订阅全网 Borrow/Redeem/RepayBorrow/LiquidateBorrow/MarketEntered 事件, SubID: {msg['result']}")
+                    self.Log.info(f"成功订阅全网 Borrow/Redeem/RepayBorrow/LiquidateBorrow/MarketEntered/NewTransmission/AnswerUpdated 事件, SubID: {msg['result']}")
                     while True:
                         try:
                             message = json.loads(await ws.recv())
                             if "params" in message and "result" in message["params"]:
                                 log = message["params"]["result"]
-                                prior, user_addr = self._process_events_log(log)
-                                if user_addr in config.BLACKLIST or user_addr in self._pending_users:
+                                process_result = self._process_events_log(log)
+                                if not process_result:
                                     continue
-                                self._pending_users.add(user_addr)
+                                prior, address = process_result
+
+                                self._pending_users.add(address)
+
                                 try:
                                     await self._task_queue.put((prior, self._prior_counter['user_event'], {
-                                        "type": "user_event",
-                                        "u_addr": user_addr,
+                                        "type": 'user_event',
+                                        "address": address,
                                         "ts": time.time()
                                     }))
                                     self._prior_counter['user_event'] += 1
@@ -278,7 +299,7 @@ class Run:
                             try:
                                 await self._task_queue.put((2, self._prior_counter['price_update'], {
                                     "type": "price_update",
-                                    "v_addr": vtoken_addr,
+                                    "address": vtoken_addr,
                                     "ts": time.time()
                                 }))
                                 self._prior_counter['price_update'] += 1
@@ -305,7 +326,38 @@ class Run:
                 else:
                     config.RETRY_DELAY_PRICE = 0
 
+    async def listen_mempool(self):
+        subscribe_msg = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "eth_subscribe",
+            "params": ["newPendingTransactions"]
+        }
+        while True:
+            try:
+                async with websockets.connect(
+                        config.BSC_WSS_URI, ping_timeout=120, ping_interval=5, close_timeout=5) as ws:
+                    await ws.send(json.dumps(subscribe_msg))
+                    msg = json.loads(await ws.recv())
+                    self.Log.info(f"成功订阅 Mempool... SubID: {msg["result"]}")
+                    async for message in ws:
+                        data = json.loads(message)
+                        tx_hash = data['params']['result']
+                        try:
+                            await self._task_queue.put((0, self._prior_counter['oracle_update'], {
+                                "type": "oracle_update",
+                                "tx_hash": tx_hash,
+                                "ts": time.time()
+                            }))
+                            self._prior_counter['oracle_update'] += 1
+                        except asyncio.QueueFull:
+                            self.Log.warning("任务队列达到上限！")
+
+            except (ConnectionClosedError, ConnectionResetError, TimeoutError) as e:
+                self.Log.error(f"监听公共池-发生异常: {e}, 异常类型: {type(e)}, 正在重新连接...")
+
     async def main(self):
+        self._event = await self._client.get_event()
         await self._load_vtoken_cache_()
         await self._init_price_()
 

@@ -6,7 +6,7 @@ class RedisClient:
 
     async def save_users(self, name, address_list):
         await self._db.sadd(name, *address_list)
-        print(f"保存成功！库内地址数: {self._db.scard(name)}")
+        print(f"保存成功！库内地址数: {await self._db.scard(name)}")
 
     async def update_user_hf_in_order(self, name, item):
         await self._db.zadd(name, item)
@@ -32,6 +32,9 @@ class RedisClient:
     async def update_user_asset_map_list(self, name, user_address):
         await self._db.sadd(name, user_address)
 
+    async def get_user_asset_map_list(self, name):
+        return await self._db.smembers(name)
+
     async def update_user_profile(self, name, user_profile):
         await self._db.hset(name, mapping=user_profile)
 
@@ -50,14 +53,17 @@ class RedisClient:
     async def get_exchange_rate(self, name):
         return await self._db.get(name)
 
-    async def update_pair(self, name, value):
-        await self._db.set(name, value)
+    async def update_pair(self, name, key, value):
+        await self._db.hset(name, key, value)
 
-    async def get_pair(self, name):
-        return await self._db.get(name)
+    async def get_pair(self, name, key):
+        return await self._db.hget(name, key)
 
-    async def exist_pair(self, name):
-        return await self._db.exists(name)
+    async def get_pairs(self, name):
+        return await self._db.hgetall(name)
+
+    async def exist_pair(self, name, key):
+        return await self._db.hexists(name, key)
 
     async def remove_pair(self, name):
         await self._db.delete(name)
@@ -95,5 +101,35 @@ class RedisClient:
     async def get_vtoken(self, name, key):
         return await self._db.hget(name, key)
 
-    async def get_symbol(self, name, key):
-        return await self._db.hget(name, key)
+    async def update_oracle_source(self, name, key, value):
+        await self._db.hset(name, key, value)
+
+    async def exist_oracle_source(self, name):
+        return await self._db.exists(name)
+
+    async def get_oracle_source(self, name):
+        return await self._db.hvals(name)
+
+    async def update_last_block(self, name, value):
+        await self._db.set(name, value)
+
+    async def get_last_block(self, name):
+        return await self._db.get(name)
+
+    async def scan(self, cursor, match, count):
+        return await self._db.scan(cursor, match, count)
+
+    def scan_iter(self, match):
+        return self._db.scan_iter(match)
+
+    async def set(self, name, value):
+        return await self._db.set(name, value)
+
+    async def get(self, name):
+        return await self._db.get(name)
+
+    async def delete(self, name):
+        return await self._db.delete(name)
+
+    async def exist(self, name):
+        return await self._db.exists(name)
