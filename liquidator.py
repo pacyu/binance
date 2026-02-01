@@ -86,6 +86,17 @@ class Liquidator:
         min_pay_redeem_amount = float('inf')
         pairs = await self._db.get_pairs(f"pair:{collateral_underlying_address}")
         for node, pair_address in pairs.items():
+            if node == debt_underlying_address:
+                path = [self._client.to_checksum_address(collateral_underlying_address),
+                        self._client.to_checksum_address(debt_underlying_address)]
+                try:
+                    pay_redeem_amount = await self.calc_pay_redeem_amount(repay_amount, path)
+                    if 0 < pay_redeem_amount < min_pay_redeem_amount:
+                        min_pay_redeem_amount = pay_redeem_amount
+                        best_path = path
+                        break
+                except web3.exceptions.ContractLogicError:
+                    continue
             if pair_address != debt_wbnb_pair_address:
                 if await self._db.exist_pair(f"pair:{node}", debt_underlying_address):
                     if await self._db.get_pair(f"pair:{node}", debt_underlying_address) != debt_wbnb_pair_address:
