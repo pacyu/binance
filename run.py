@@ -22,7 +22,7 @@ class Run:
         bloxroute_api_key = os.getenv('BLOXROUTE_API_KEY')
         bloxroute_auth_header = os.getenv('BLOXROUTE_AUTH_HEADER')
         self._db = RedisClient()
-        self._client = VenusClient(config.ANKR_RPC_URL,
+        self._client = VenusClient(config.NODEREAL_RPC_URL,
                                    config.VENUS_CORE_COMPTROLLER_ADDR,
                                    private_key,
                                    bloxroute_api_key,
@@ -90,7 +90,8 @@ class Run:
     async def _handle_user_event(self, task):
         user_addr = task["address"]
         await self._process_and_analyze(user_addr)
-        self._pending_users.remove(user_addr)
+        if user_addr in self._pending_users:
+            self._pending_users.remove(user_addr)
 
     async def _handle_price_update(self, task):
         vtoken_addr = task["address"]
@@ -215,6 +216,20 @@ class Run:
             self.Log.info(f"🔥 检测到用户抵押事件! 合约地址: {vtoken_addr} | 用户: {user_addr}"
                           f" | 市场地址: {market_addr} | transactionHash: {log['transactionHash']}")
             return 1, user_addr
+
+    async def full_scan(self):
+        while True:
+            user_address_list = list(await self._db.read_by_name('user_address_tab'))
+
+            if not user_address_list:
+                continue
+
+            batch_size = 20
+            for i in range(0, len(user_address_list), batch_size):
+                batch = user_address_list[i: i + batch_size]
+                await asyncio.gather(*(self._process_user(addr, self._binance_price) for addr in batch))
+
+            await asyncio.sleep(config.POLL_DELAY)
 
     async def poll_risk_check(self):
         while True:
@@ -374,6 +389,7 @@ class Run:
         await self._init_price_()
 
         await asyncio.gather(
+            self.full_scan(),
             self.poll_risk_check(),
             self.listen_user_events(),
             self.listen_binance_price_updates(),

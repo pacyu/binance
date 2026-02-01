@@ -291,33 +291,20 @@ contract_abi = [
   },
   {
     "type": "function",
+    "name": "Owner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "ROUTER",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "USDT",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "VBNB",
     "inputs": [],
     "outputs": [
       {
@@ -351,29 +338,56 @@ contract_abi = [
         "internalType": "address"
       },
       {
-        "name": "borrower",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "repayAmount",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "vDebt",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "vCollateral",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "minProfit",
-        "type": "uint256",
-        "internalType": "uint256"
+        "name": "params",
+        "type": "tuple",
+        "internalType": "struct AlphaLiquidator.LiquidationParams",
+        "components": [
+          {
+            "name": "borrower",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "repayAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "vDebt",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "vCollateral",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "path",
+            "type": "address[]",
+            "internalType": "address[]"
+          },
+          {
+            "name": "maxInput",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "minProfit",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "dUnd",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "cUnd",
+            "type": "address",
+            "internalType": "address"
+          }
+        ]
       }
     ],
     "outputs": [],
@@ -381,23 +395,10 @@ contract_abi = [
   },
   {
     "type": "function",
-    "name": "owner",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "pancakeCall",
     "inputs": [
       {
-        "name": "",
+        "name": "sender",
         "type": "address",
         "internalType": "address"
       },
@@ -415,6 +416,19 @@ contract_abi = [
         "name": "data",
         "type": "bytes",
         "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "rescue",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "outputs": [],

@@ -1,4 +1,7 @@
 import asyncio
+
+import web3.exceptions
+
 import config
 from logging import Logger
 from analyzer import Analyzer
@@ -55,6 +58,7 @@ class Liquidator:
                     liq['net_profit'],
                     oracle_tx_hash
                 )
+                self.Log.info(f"liquidation status: {status}")
 
         await self._db.update_user_profile(f"user_profile:{user_addr}", user_profile)
         await self._db.update_user_hf_in_order("high_risk_queue", {user_addr: hf})
@@ -88,10 +92,13 @@ class Liquidator:
                         path = [self._client.to_checksum_address(collateral_underlying_address),
                                 self._client.to_checksum_address(node),
                                 self._client.to_checksum_address(debt_underlying_address)]
-                        pay_redeem_amount = await self.calc_pay_redeem_amount(repay_amount, path)
-                        if 0 < pay_redeem_amount < min_pay_redeem_amount:
-                            min_pay_redeem_amount = pay_redeem_amount
-                            best_path = path
+                        try:
+                            pay_redeem_amount = await self.calc_pay_redeem_amount(repay_amount, path)
+                            if 0 < pay_redeem_amount < min_pay_redeem_amount:
+                                min_pay_redeem_amount = pay_redeem_amount
+                                best_path = path
+                        except web3.exceptions.ContractLogicError:
+                            continue
 
         return best_path, min_pay_redeem_amount
 
@@ -186,7 +193,7 @@ class Liquidator:
                                                         best_collateral['underlying_address'],
                                                         best_debt['underlying_address'],
                                                         repay_amount_wei)
-        repay_cost_usd = (pay_redeem_amount_wei / 1e18) * prices[best_collateral['v_addr']]
+        repay_cost_usd = (pay_redeem_amount_wei * prices[best_collateral['v_addr']]) / 1e36
 
         # 4. 毛利润
         gross_profit_usd = repay_usd * (incentive_rate - 1)
@@ -205,11 +212,12 @@ class Liquidator:
             await self._db.mark_as_non_liquidable(f"liquidator:skip:{user_addr}", config.COOLDOWN_TTL_DAY, "low_profit")
 
         return {
-            "is_profitable": net_profit >= config.MIN_PROFIT_TOLERANCE, # 利润大于 2 刀
+            "is_profitable": net_profit >= config.MIN_PROFIT_TOLERANCE, # 利润大于 1 刀
             "repay_amount": repay_amount_wei,
             "pair_address": pair_address,
             "best_debt": best_debt,
             "best_collateral": best_collateral,
+            "best_path": best_path,
             "pay_redeem_amount": pay_redeem_amount_wei,
             "min_profit": min_profit_wei,
             "net_profit": net_profit,
@@ -238,7 +246,9 @@ class Liquidator:
                 collateral['v_addr'],
                 path,
                 pay_redeem_amount_wei,
-                min_profit_wei
+                min_profit_wei,
+                debt['underlying_address'],
+                collateral['underlying_address'],
             )
         except Exception as e:
             self.Log.error(f"⚠️ [模拟失败]: {e}")
@@ -253,26 +263,29 @@ class Liquidator:
                 collateral['v_addr'],
                 path,
                 pay_redeem_amount_wei,
-                min_profit_wei
+                min_profit_wei,
+                debt['underlying_address'],
+                collateral['underlying_address'],
             )
             if net_profit > 50:
-                try:
-                    response = await self._client.send_private_transaction(signed_tx)
-                    if "result" in response:
-                        tx_hash = HexBytes(response["result"])
-                    else:
-                        self.Log.error(f"❌ 私有广播失败: {response}")
+                if oracle_tx_hash:
+                    await self._client.send_bundle_to_bloxroute(oracle_tx_hash, signed_tx.rawTransaction.hex())
+                else:
+                    try:
+                        response = await self._client.send_private_transaction(signed_tx)
+                        if "result" in response:
+                            tx_hash = HexBytes(response["result"])
+                        else:
+                            self.Log.error(f"❌ 私有广播失败: {response}")
+                            return False
+                    except Exception as e:
+                        self.Log.error(f"❌ 私有通道请求异常: {e}")
                         return False
-                except Exception as e:
-                    self.Log.error(f"❌ 私有通道请求异常: {e}")
-                    return False
-            elif oracle_tx_hash:
-                await self._client.send_bundle_to_bloxroute(oracle_tx_hash, signed_tx.rawTransaction.hex())
             else:
                 tx_hash = await self._client.send_raw_transaction(signed_tx.rawTransaction)
             self.Log.info(f"🚀 清算交易已发出！Hash: {tx_hash.hex()}")
 
-        return asyncio.create_task(self.check_receipt_status(tx_hash, user_address)).result()
+        return await asyncio.create_task(self.check_receipt_status(tx_hash, user_address))
 
     async def check_receipt_status(self, tx_hash, user_address) -> bool:
         # 这里的 wait_for_transaction_receipt 建议设置 timeout

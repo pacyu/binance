@@ -337,22 +337,26 @@ class VenusClient:
                                           pair_address: str,
                                           borrower: str,
                                           amount: int,
-                                          vtoken_debt_address: str,
-                                          vtoken_collateral_address: str,
+                                          vdebt_address: str,
+                                          vcollateral_address: str,
                                           path: List[str],
                                           pay_redeem_amount: int,
-                                          min_profit: int) -> SignedTx:
+                                          min_profit: int,
+                                          debt_underlying_address: str,
+                                          collateral_underlying_address: str) -> SignedTx:
         """
         调用我的智能合约发送清算交易。
 
         :param pair_address: 交易对地址
         :param borrower: 被清算人的钱包地址
         :param amount: 代偿数量 (单位为 Wei)
-        :param vtoken_debt_address: 被清算人欠款的 vToken 合约地址 (如 vUSDT)
-        :param vtoken_collateral_address: 你想拿走的抵押品 vToken 合约地址 (如 vBNB)
+        :param vdebt_address: 被清算人欠款的 vToken 合约地址 (如 vUSDT)
+        :param vcollateral_address: 你想拿走的抵押品 vToken 合约地址 (如 vBNB)
         :param path: 最优路径
         :param pay_redeem_amount: 最小支付赎回数量 (单位为 Wei)
         :param min_profit: 要求的最低利润 (Wei)
+        :param debt_underlying_address: 负债代币底层地址
+        :param collateral_underlying_address: 抵押代币底层地址
         """
         if not self.private_key:
             raise ValueError("Private key is required for sending transactions.")
@@ -361,15 +365,21 @@ class VenusClient:
 
         nonce = await self.get_transaction_count()
 
+        params = {
+            "borrower": self.to_checksum_address(borrower),
+            "repayAmount": amount,
+            "vDebt": self.to_checksum_address(vdebt_address),
+            "vCollateral": self.to_checksum_address(vcollateral_address),
+            "path": path,
+            "maxInput": pay_redeem_amount,
+            "minProfit": min_profit,
+            "dUnd": self.to_checksum_address(debt_underlying_address),
+            "cUnd": self.to_checksum_address(collateral_underlying_address),
+        }
+
         tx = await alpha_contract.functions.execute(
             self.to_checksum_address(pair_address),
-            self.to_checksum_address(borrower),
-            amount,
-            self.to_checksum_address(vtoken_debt_address),
-            self.to_checksum_address(vtoken_collateral_address),
-            path,
-            pay_redeem_amount,
-            min_profit
+            params
         ).build_transaction({
             'from': self.account_address,
             'nonce': nonce,
@@ -380,6 +390,53 @@ class VenusClient:
 
         signed_tx = await self._async_w3.eth.account.sign_transaction(tx, self.private_key)
         return signed_tx
+
+    async def simulate_liquidation_tx(self,
+                                      pair_address,
+                                      borrower: str,
+                                      amount: int,
+                                      vdebt_address: str,
+                                      vcollateral_address: str,
+                                      path: List[str],
+                                      pay_redeem_amount: int,
+                                      min_profit: int,
+                                      debt_underlying_address: str,
+                                      collateral_underlying_address: str) -> bool:
+        """
+        模拟发送清算交易。
+
+        :param pair_address: 交易对地址
+        :param borrower: 被清算人的钱包地址
+        :param amount: 你代为偿还的金额 (单位为 Wei)
+        :param vdebt_address: 被清算人欠款的 vToken 合约地址 (如 vUSDT)
+        :param vcollateral_address: 你想拿走的抵押品 vToken 合约地址 (如 vBNB)
+        :param path: 兑换路径
+        :param pay_redeem_amount: 最小支付数量 (单位为 Wei)
+        :param min_profit: 要求的最低利润 (Wei)
+        :param debt_underlying_address: 负债代币底层地址
+        :param collateral_underlying_address: 抵押代币底层地址
+        :return: bool
+        """
+        alpha_contract = await self.get_contract(config.CONTRACT_ADDR, abi.contract_abi)
+
+        params = {
+            "borrower": self.to_checksum_address(borrower),
+            "repayAmount": amount,
+            "vDebt": self.to_checksum_address(vdebt_address),
+            "vCollateral": self.to_checksum_address(vcollateral_address),
+            "path": path,
+            "maxInput": pay_redeem_amount,
+            "minProfit": min_profit,
+            "dUnd": self.to_checksum_address(debt_underlying_address),
+            "cUnd": self.to_checksum_address(collateral_underlying_address),
+        }
+
+        # 这会在本地节点/远程节点执行逻辑，但不广播交易，不花 Gas
+        await alpha_contract.functions.execute(
+            self.to_checksum_address(pair_address),
+            params
+        ).call({'from': self.account_address})
+        return True
 
     async def send_raw_transaction(self, transaction: HexStr):
         return await self._async_w3.eth.send_raw_transaction(transaction)
@@ -440,43 +497,6 @@ class VenusClient:
 
         signed_tx = await self._async_w3.eth.account.sign_transaction(tx, self.private_key)
         return await self.send_raw_transaction(signed_tx.rawTransaction)
-
-    async def simulate_liquidation_tx(self,
-                                      pair_address,
-                                      user_address: str,
-                                      amount: int,
-                                      vtoken_debt_address: str,
-                                      vtoken_collateral_address: str,
-                                      path: List[str],
-                                      pay_redeem_amount: int,
-                                      min_profit_wei: int) -> bool:
-        """
-        模拟发送清算交易。
-
-        :param pair_address: 交易对地址
-        :param user_address: 被清算人的钱包地址
-        :param amount: 你代为偿还的金额 (单位为 Wei)
-        :param vtoken_debt_address: 被清算人欠款的 vToken 合约地址 (如 vUSDT)
-        :param vtoken_collateral_address: 你想拿走的抵押品 vToken 合约地址 (如 vBNB)
-        :param path: 兑换路径
-        :param pay_redeem_amount: 最小支付数量 (单位为 Wei)
-        :param min_profit_wei: 要求的最低利润 (Wei)
-        :return: bool
-        """
-        alpha_contract = await self.get_contract(config.CONTRACT_ADDR, abi.contract_abi)
-
-        # 这会在本地节点/远程节点执行逻辑，但不广播交易，不花 Gas
-        await alpha_contract.functions.execute(
-            self.to_checksum_address(pair_address),
-            self.to_checksum_address(user_address),
-            int(amount),
-            self.to_checksum_address(vtoken_debt_address),
-            self.to_checksum_address(vtoken_collateral_address),
-            path,
-            pay_redeem_amount,
-            int(min_profit_wei)
-        ).call({'from': self.account_address})
-        return True
 
     async def ensure_unlimited_approval(self, underlying_addr, vtoken_addr, current_nonce):
         """
