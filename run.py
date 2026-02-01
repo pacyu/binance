@@ -100,21 +100,21 @@ class Run:
         tx_hash = task["tx_hash"]
         await self._process_transaction(tx_hash)
 
+    async def _process_user(self, u_addr, prices, oracle_tx_hash: str= None):
+        risky_report = await self.analyzer.analyze_user(u_addr, prices)
+        if risky_report['is_liquidatable']:
+            await self.engine.handle_liquidation(risky_report, oracle_tx_hash)
+
     async def _check_opportunity(self, vtoken_addr, prices, oracle_tx_hash: str=None):
         user_address_list = list(await self._db.read_by_name(f'asset:users:{vtoken_addr}'))
         
         if not user_address_list:
             return
 
-        async def _process_user(u_addr):
-            risky_report = await self.analyzer.analyze_user(u_addr, prices)
-            if risky_report['is_liquidatable']:
-                await self.engine.handle_liquidation(risky_report, oracle_tx_hash)
-
         batch_size = 20
         for i in range(0, len(user_address_list), batch_size):
             batch = user_address_list[i: i + batch_size]
-            await asyncio.gather(*(_process_user(addr) for addr in batch))
+            await asyncio.gather(*(self._process_user(addr, prices, oracle_tx_hash) for addr in batch))
 
     async def _process_and_analyze(self, user_addr):
         risky_report = await self.analyzer.analyze_user(user_addr.lower(), self._binance_price)
@@ -132,7 +132,7 @@ class Run:
                 for v_addr in result:
                     await self._check_opportunity(v_addr, self._onchain_price, tx_hash)
         except Exception as e:
-            self.Log.debug(f"未找到交易hash: {e}")
+            self.Log.debug(f"未找到交易 hash: {e}")
 
     def _process_events_log(self, log):
         vtoken_addr = log['address']
@@ -218,12 +218,18 @@ class Run:
 
     async def poll_risk_check(self):
         while True:
-            user_address_list = await self._db.get_user_hf_by_score('high_risk_queue', 0, float('inf'))
-            for user_addr in user_address_list:
-                risky_report = await self.analyzer.analyze_user(user_addr, self._binance_price)
-                if risky_report['is_liquidatable']:
-                    await self.engine.handle_liquidation(risky_report)
             await self._db.remove_user_hf_by_score('high_risk_queue', 1.3, float('inf'))
+
+            user_address_list = await self._db.get_user_hf_by_score('high_risk_queue', 0, float('inf'))
+
+            if not user_address_list:
+                continue
+
+            batch_size = 20
+            for i in range(0, len(user_address_list), batch_size):
+                batch = user_address_list[i: i + batch_size]
+                await asyncio.gather(*(self._process_user(addr, self._binance_price) for addr in batch))
+
             await asyncio.sleep(config.POLL_DELAY)
 
     async def listen_user_events(self):
