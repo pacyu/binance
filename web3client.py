@@ -417,6 +417,9 @@ class VenusClient:
         :param collateral_underlying_address: 抵押代币底层地址
         :return: bool
         """
+        if not self.private_key:
+            raise ValueError("Private key is required for sending transactions.")
+        
         alpha_contract = await self.get_contract(config.CONTRACT_ADDR, abi.contract_abi)
 
         params = {
@@ -431,7 +434,6 @@ class VenusClient:
             "cUnd": self.to_checksum_address(collateral_underlying_address),
         }
 
-        # 这会在本地节点/远程节点执行逻辑，但不广播交易，不花 Gas
         await alpha_contract.functions.execute(
             self.to_checksum_address(pair_address),
             params
