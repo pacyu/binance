@@ -38,7 +38,7 @@ class Run:
         self._event = None
         self._task_queue = asyncio.PriorityQueue(maxsize=2000)
         self._pending_users = set()
-        self._prior_counter = {'user_event': 0, 'price_update': 0}
+        self._prior_counter = {'user_event': 0, 'price_update': 0, 'oracle_update': 0}
 
         self._execution_lock = asyncio.Lock()
 
@@ -124,12 +124,15 @@ class Run:
             await self.engine.handle_liquidation(risky_report)
 
     async def _process_transaction(self, tx_hash):
-        tx = await self._client.get_transaction(tx_hash)
-        oracle_address = tx['to']
-        if await self._db.exist_oracle_source(f"oracle:address:{oracle_address}"):
-            result = await self._db.get_oracle_source(f"oracle:address:{oracle_address}")
-            for v_addr in result:
-                await self._check_opportunity(v_addr, self._onchain_price, tx_hash)
+        try:
+            tx = await self._client.get_transaction(tx_hash)
+            oracle_address = tx['to']
+            if await self._db.exist_oracle_source(f"oracle:address:{oracle_address}"):
+                result = await self._db.get_oracle_source(f"oracle:address:{oracle_address}")
+                for v_addr in result:
+                    await self._check_opportunity(v_addr, self._onchain_price, tx_hash)
+        except Exception as e:
+            self.Log.debug(f"未找到交易hash: {e}")
 
     def _process_events_log(self, log):
         vtoken_addr = log['address']
@@ -239,7 +242,7 @@ class Run:
                         config.BSC_WSS_URI, ping_timeout=120, ping_interval=5, close_timeout=5) as ws:
                     await ws.send(json.dumps(subscribe_msg))
                     msg = json.loads(await ws.recv())
-                    self.Log.info(f"成功订阅全网 Borrow/Redeem/RepayBorrow/LiquidateBorrow/MarketEntered/NewTransmission/AnswerUpdated 事件, SubID: {msg['result']}")
+                    self.Log.info(f"成功订阅全网 Borrow/Redeem/RepayBorrow/LiquidateBorrow/MarketEntered 事件, SubID: {msg['result']}")
                     while True:
                         try:
                             message = json.loads(await ws.recv())
@@ -260,7 +263,7 @@ class Run:
                                     }))
                                     self._prior_counter['user_event'] += 1
                                 except asyncio.QueueFull:
-                                    self.Log.warning("任务队列达到上线！")
+                                    self.Log.warning("任务队列达到上线!")
 
                         except LogTopicError as e:
                             self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}, 日志: {log}")
@@ -304,7 +307,7 @@ class Run:
                                 }))
                                 self._prior_counter['price_update'] += 1
                             except asyncio.QueueFull:
-                                self.Log.warning("任务队列达到上限！")
+                                self.Log.warning("任务队列达到上限!")
 
                         self._binance_price[vtoken_addr] = current_price
 
@@ -351,7 +354,7 @@ class Run:
                             }))
                             self._prior_counter['oracle_update'] += 1
                         except asyncio.QueueFull:
-                            self.Log.warning("任务队列达到上限！")
+                            self.Log.warning("任务队列达到上限!")
 
             except (ConnectionClosedError, ConnectionResetError, TimeoutError) as e:
                 self.Log.error(f"监听公共池-发生异常: {e}, 异常类型: {type(e)}, 正在重新连接...")
@@ -365,6 +368,7 @@ class Run:
             self.poll_risk_check(),
             self.listen_user_events(),
             self.listen_binance_price_updates(),
+            self.listen_mempool(),
             self.listen_worker(),
         )
 
