@@ -344,17 +344,20 @@ class Run:
                     msg = json.loads(await ws.recv())
                     self.Log.info(f"成功订阅 Mempool... SubID: {msg["result"]}")
                     async for message in ws:
-                        data = json.loads(message)
-                        tx_hash = data['params']['result']
                         try:
-                            await self._task_queue.put((0, self._prior_counter['oracle_update'], {
-                                "type": "oracle_update",
-                                "tx_hash": tx_hash,
-                                "ts": time.time()
-                            }))
-                            self._prior_counter['oracle_update'] += 1
-                        except asyncio.QueueFull:
-                            self.Log.warning("任务队列达到上限!")
+                            data = json.loads(message)
+                            tx_hash = data['params']['result']
+                            try:
+                                await self._task_queue.put((0, self._prior_counter['oracle_update'], {
+                                    "type": "oracle_update",
+                                    "tx_hash": tx_hash,
+                                    "ts": time.time()
+                                }))
+                                self._prior_counter['oracle_update'] += 1
+                            except asyncio.QueueFull:
+                                self.Log.warning("任务队列达到上限!")
+                        except KeyError as e:
+                            self.Log.error(f"消息错误: {e}")
 
             except (ConnectionClosedError, ConnectionResetError, TimeoutError) as e:
                 self.Log.error(f"监听公共池-发生异常: {e}, 异常类型: {type(e)}, 正在重新连接...")
