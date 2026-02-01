@@ -134,7 +134,7 @@ class VenusClient:
         return await contract.functions.getAllMarkets().call()
 
     async def get_amounts_in(self, amount: int, path: list):
-        router_contract = await self.get_contract(config.VENUS_CORE_COMPTROLLER_ADDR, abi.router_abi)
+        router_contract = await self.get_contract(config.ROUTER_ADDRESS, abi.router_abi)
         return await router_contract.functions.getAmountsIn(amount, path).call()
 
     async def get_assets_in(self, user_address: str) -> List[str]:
