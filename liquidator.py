@@ -187,30 +187,31 @@ class Liquidator:
                                       best_debt['underlying_decimal'])
 
         # 1. 预估 gas 成本
-        gas_price_wei = await self._client.get_gas_price()
+        gas_price_wei = self._client.get_gas_price()
         estimated_gas = 1000000  # 清算交易通常消耗较多 gas
         gas_cost_bnb = (gas_price_wei * estimated_gas) / 1e18
         bnb_price = await self._client.get_oracle_price([config.BNB_VTOKEN_ADDRESS])
         gas_cost_usd = gas_cost_bnb * bnb_price[config.BNB_VTOKEN_ADDRESS] / 1e18
 
-        # 2. 获得的抵押品总价值
-        gross_reward_usd = repay_usd * incentive_rate
-
-        # 3. 滑点 + swap手续费（0.25%）成本
-        pair_address = await self._db.get_pair(f"pair:{best_debt['underlying_address']}",
-                                               config.WBNB_VTOKEN_UNDER_ADDRESS)
+        if best_debt['underlying_address'] != config.WBNB_VTOKEN_UNDER_ADDRESS:
+            pair_address = await self._db.get_pair(f"pair:{best_debt['underlying_address']}",
+                                                   config.WBNB_VTOKEN_UNDER_ADDRESS)
+        else:
+            pair_address = await self._db.get_pair(f"pair:{best_debt['underlying_address']}",
+                                                   config.USDT_VTOKEN_UNDER_ADDRESS)
+        # 2. 滑点 + swap手续费（0.25%）成本
         best_path, pay_redeem_amount_wei = await self.calc_best_path(
                                                         pair_address,
                                                         best_collateral['underlying_address'],
                                                         best_debt['underlying_address'],
                                                         repay_amount_wei)
-        repay_cost_usd = (pay_redeem_amount_wei * prices[best_collateral['v_addr']]) / 1e36
+        repay_cost_usd = (pay_redeem_amount_wei * prices[best_collateral['v_addr']]) / 10**(18 + best_collateral['underlying_decimal'])
 
-        # 4. 毛利润
+        # 3. 毛利润
         gross_profit_usd = repay_usd * (incentive_rate - 1)
 
-        # 5. 净利润
-        net_profit = gross_reward_usd - repay_cost_usd - gas_cost_usd
+        # 4. 净利润
+        net_profit = gross_profit_usd - repay_cost_usd - gas_cost_usd
 
         self.Log.info(f"--- ⚖️ 用户 {user_addr} 清算决策报告 ---")
         self.Log.info(f"🔹 待清算金额:  ${repay_usd} USD")
@@ -249,7 +250,7 @@ class Liquidator:
         self.Log.info(f"负债: {debt['symbol']}, 抵押品: {collateral['symbol']}")
 
         try:
-            await self._client.simulate_liquidation_tx(
+            self._client.simulate_liquidation_tx(
                 pair_address,
                 user_address,
                 repay_amount_wei,
@@ -266,7 +267,7 @@ class Liquidator:
             return False
 
         async with self._execution_lock:
-            signed_tx = await self._client.create_alpha_liquidation_tx(
+            signed_tx = self._client.create_alpha_liquidation_tx(
                 pair_address,
                 user_address,
                 repay_amount_wei,

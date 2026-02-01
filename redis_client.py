@@ -41,6 +41,9 @@ class RedisClient:
     async def get_user_profile(self, name):
         return await self._db.hgetall(name)
 
+    async def get_all_users(self, name):
+        return await self._db.keys(name)
+
     async def exist_user_profile(self, name):
         return await self._db.exists(name)
 

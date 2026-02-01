@@ -22,7 +22,7 @@ class Run:
         bloxroute_api_key = os.getenv('BLOXROUTE_API_KEY')
         bloxroute_auth_header = os.getenv('BLOXROUTE_AUTH_HEADER')
         self._db = RedisClient()
-        self._client = VenusClient(config.NODEREAL_RPC_URL,
+        self._client = VenusClient(config.ANKR_RPC_URL,
                                    config.VENUS_CORE_COMPTROLLER_ADDR,
                                    private_key,
                                    bloxroute_api_key,
@@ -37,6 +37,7 @@ class Run:
         self.engine = Liquidator(self._client, self._db, self.analyzer, self.Log)
         self._event = None
         self._task_queue = asyncio.PriorityQueue(maxsize=2000)
+        self._semaphore = asyncio.Semaphore(100)
         self._pending_users = set()
         self._prior_counter = {'user_event': 0, 'price_update': 0, 'oracle_update': 0}
 
@@ -101,10 +102,23 @@ class Run:
         tx_hash = task["tx_hash"]
         await self._process_transaction(tx_hash)
 
+    async def _process_users(self, user_address_list, prices):
+        risky_reports = await self.analyzer.analyze_users(user_address_list, prices)
+
+        async def _process_report(report):
+            async with self._semaphore:
+                if report['is_liquidatable']:
+                    await self.engine.handle_liquidation(report)
+
+        batch_size = 20
+        for i in range(0, len(risky_reports), batch_size):
+            await asyncio.gather(*(_process_report(report) for report in risky_reports[i:i + batch_size]))
+
     async def _process_user(self, u_addr, prices, oracle_tx_hash: str= None):
-        risky_report = await self.analyzer.analyze_user(u_addr, prices)
-        if risky_report['is_liquidatable']:
-            await self.engine.handle_liquidation(risky_report, oracle_tx_hash)
+        async with self._semaphore:
+            risky_report = await self.analyzer.analyze_user(u_addr, prices)
+            if risky_report['is_liquidatable']:
+                await self.engine.handle_liquidation(risky_report, oracle_tx_hash)
 
     async def _check_opportunity(self, vtoken_addr, prices, oracle_tx_hash: str=None):
         user_address_list = list(await self._db.read_by_name(f'asset:users:{vtoken_addr}'))
@@ -112,10 +126,11 @@ class Run:
         if not user_address_list:
             return
 
-        batch_size = 20
-        for i in range(0, len(user_address_list), batch_size):
-            batch = user_address_list[i: i + batch_size]
-            await asyncio.gather(*(self._process_user(addr, prices, oracle_tx_hash) for addr in batch))
+        tasks = [
+            asyncio.create_task(self._process_user(addr, prices, oracle_tx_hash))
+            for addr in user_address_list
+        ]
+        await asyncio.gather(*tasks)
 
     async def _process_and_analyze(self, user_addr):
         risky_report = await self.analyzer.analyze_user(user_addr.lower(), self._binance_price)
@@ -219,20 +234,26 @@ class Run:
 
     async def full_scan(self):
         while True:
+            self.Log.info(f"全量扫描任务开始，该任务每小时执行一次...")
             user_address_list = list(await self._db.read_by_name('user_address_tab'))
 
             if not user_address_list:
                 continue
 
-            batch_size = 20
-            for i in range(0, len(user_address_list), batch_size):
-                batch = user_address_list[i: i + batch_size]
-                await asyncio.gather(*(self._process_user(addr, self._binance_price) for addr in batch))
+            batch_size = 600
 
-            await asyncio.sleep(config.POLL_DELAY)
+            tasks = [
+                asyncio.create_task(self._process_users(user_address_list[i: i + batch_size], self._binance_price))
+                for i in range(0, len(user_address_list), batch_size)
+            ]
+
+            await asyncio.gather(*tasks)
+            self.Log.info(f"全量扫描完成! 休眠 {config.FULL_SCAN_DELAY} 秒.")
+            await asyncio.sleep(config.FULL_SCAN_DELAY)
 
     async def poll_risk_check(self):
         while True:
+            self.Log.info(f"轮询任务开始，该任务每 25 秒执行一次...")
             await self._db.remove_user_hf_by_score('high_risk_queue', 1.3, float('inf'))
 
             user_address_list = await self._db.get_user_hf_by_score('high_risk_queue', 0, float('inf'))
@@ -240,11 +261,12 @@ class Run:
             if not user_address_list:
                 continue
 
-            batch_size = 20
-            for i in range(0, len(user_address_list), batch_size):
-                batch = user_address_list[i: i + batch_size]
-                await asyncio.gather(*(self._process_user(addr, self._binance_price) for addr in batch))
-
+            tasks = [
+                asyncio.create_task(self._process_user(addr, self._binance_price))
+                for addr in user_address_list
+            ]
+            await asyncio.gather(*tasks)
+            self.Log.info(f"轮询任务完成! 休眠 {config.POLL_DELAY} 秒.")
             await asyncio.sleep(config.POLL_DELAY)
 
     async def listen_user_events(self):
@@ -393,7 +415,7 @@ class Run:
             self.poll_risk_check(),
             self.listen_user_events(),
             self.listen_binance_price_updates(),
-            self.listen_mempool(),
+            # self.listen_mempool(),
             self.listen_worker(),
         )
 

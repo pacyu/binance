@@ -4,7 +4,7 @@ import config
 import aiohttp
 from web3 import Web3, HTTPProvider
 from web3 import AsyncWeb3, AsyncHTTPProvider
-from web3.contract import AsyncContract
+from web3.contract import AsyncContract, Contract
 from web3.contract.async_contract import AsyncContractEvents
 from eth_account import Account
 from multicall import Call, Multicall
@@ -44,7 +44,17 @@ class VenusClient:
     def get_async_w3(self) -> AsyncWeb3:
         return self._async_w3
 
-    async def get_contract(self, address: str, _abi: List) -> AsyncContract:
+    def get_contract(self, address: str, _abi: List) -> Contract:
+        """
+        获取合约实例。
+
+        :param address: 合约的链上地址
+        :param _abi: 接口查询ABI
+        :return: 合约实例 Contract
+        """
+        return self._w3.eth.contract(address=self.to_checksum_address(address), abi=_abi)
+
+    async def get_async_contract(self, address: str, _abi: List) -> AsyncContract:
         """
         获取合约实例。
 
@@ -55,7 +65,7 @@ class VenusClient:
         return self._async_w3.eth.contract(address=self.to_checksum_address(address), abi=_abi)
 
     def to_checksum_address(self, address: str) -> ChecksumAddress:
-        return self._async_w3.to_checksum_address(address)
+        return self._w3.to_checksum_address(address)
 
     async def get_logs(self, filter_params: FilterParams) -> List[LogReceipt]:
         return await self._async_w3.eth.get_logs(filter_params)
@@ -67,8 +77,8 @@ class VenusClient:
     async def get_block_number(self) -> BlockNumber:
         return await self._async_w3.eth.block_number
 
-    async def keccak(self, signature: str) -> bytes:
-        return self._async_w3.keccak(text=signature)
+    def keccak(self, signature: str) -> bytes:
+        return self._w3.keccak(text=signature)
 
     async def fetch_user_address(self, start_block: int, end_block: int) -> List[str]:
         logs = await self.get_logs({
@@ -83,8 +93,8 @@ class VenusClient:
             user_address_list.append(user)
         return user_address_list
 
-    async def get_gas_price(self) -> Wei:
-        return await self._async_w3.eth.gas_price
+    def get_gas_price(self) -> Wei:
+        return self._w3.eth.gas_price
 
     async def get_oracle_address(self) -> str:
         """
@@ -92,7 +102,7 @@ class VenusClient:
 
         :return: 42位以 0x 开头的地址字符串。
         """
-        comp_contract = await self.get_contract(self.comptroller_addr, abi.oracle_abi)
+        comp_contract = await self.get_async_contract(self.comptroller_addr, abi.oracle_abi)
         return await comp_contract.functions.oracle().call()
 
     async def get_account_snapshot(self, user_address_or_list: List[str]) -> AccountSnapshot:
@@ -122,19 +132,19 @@ class VenusClient:
         return snapshots
 
     async def symbol(self, vtoken_address: str) -> str:
-        contract = await self.get_contract(vtoken_address, abi.vtoken)
+        contract = await self.get_async_contract(vtoken_address, abi.vtoken)
         return await contract.functions.symbol().call()
 
     async def underlying(self, vtoken_address: str) -> str:
-        contract = await self.get_contract(vtoken_address, abi.vtoken)
+        contract = await self.get_async_contract(vtoken_address, abi.vtoken)
         return await contract.functions.underlying().call()
 
     async def get_all_markets(self) -> List[str]:
-        contract = await self.get_contract(config.VENUS_CORE_COMPTROLLER_ADDR, abi.comptroller)
+        contract = await self.get_async_contract(config.VENUS_CORE_COMPTROLLER_ADDR, abi.comptroller)
         return await contract.functions.getAllMarkets().call()
 
     async def get_amounts_in(self, amount: int, path: list):
-        router_contract = await self.get_contract(config.ROUTER_ADDRESS, abi.router_abi)
+        router_contract = await self.get_async_contract(config.ROUTER_ADDRESS, abi.router_abi)
         return await router_contract.functions.getAmountsIn(amount, path).call()
 
     async def get_assets_in(self, user_address: str) -> List[str]:
@@ -144,7 +154,7 @@ class VenusClient:
         :param user_address: 用户地址
         :return: list 资产地址列表
         """
-        comp_contract = await self.get_contract(config.VENUS_CORE_COMPTROLLER_ADDR, abi.comptroller)
+        comp_contract = await self.get_async_contract(config.VENUS_CORE_COMPTROLLER_ADDR, abi.comptroller)
         return await comp_contract.functions.getAssetsIn(self.to_checksum_address(user_address)).call()
 
     async def get_liquidation_incentive(self, v_address: str) -> float:
@@ -154,16 +164,16 @@ class VenusClient:
         :param v_address: 代币地址
         :return: float
         """
-        contract = await self.get_contract(v_address, abi.incentive_mantissa_abi)
+        contract = await self.get_async_contract(v_address, abi.incentive_mantissa_abi)
         mantissa = await contract.functions.liquidationIncentiveMantissa().call()
         return mantissa / 10 ** 18
 
     async def get_exchange_rate(self, vtoken_address: str) -> float:
-        contract = await self.get_contract(vtoken_address, abi.exchange_rate_abi)
+        contract = await self.get_async_contract(vtoken_address, abi.exchange_rate_abi)
         return await contract.functions.exchangeRateStored().call()
 
     async def get_cash(self, v_address: str) -> float:
-        v_contract = await self.get_contract(v_address, abi.erc20_abi)
+        v_contract = await self.get_async_contract(v_address, abi.erc20_abi)
         return await v_contract.functions.getCash().call()
 
     async def get_transaction(self, tx_hash: HexBytes) -> TxData:
@@ -173,12 +183,12 @@ class VenusClient:
         return await self._async_w3.eth.get_raw_transaction(tx_hash)
 
     async def get_pair(self, address0: str, address1: str) -> str:
-        contract = await self.get_contract(config.PANCAKE_FACTORY_ADDR, abi.pair_abi)
+        contract = await self.get_async_contract(config.PANCAKE_FACTORY_ADDR, abi.pair_abi)
         return await contract.functions.getPair(self.to_checksum_address(address0),
                                           self.to_checksum_address(address1)).call()
 
     async def get_reserves(self, address: str) -> Tuple:
-        contract = await self.get_contract(address, abi.reserves_abi)
+        contract = await self.get_async_contract(address, abi.reserves_abi)
         reserves = await contract.functions.getReserves().call()
         token0 = await contract.functions.token0().call()
         token1 = await contract.functions.token1().call()
@@ -192,8 +202,8 @@ class VenusClient:
         :return: 字典
         """
         # 1. 初始化合约
-        comp_contract = await self.get_contract(self.comptroller_addr, abi.comptroller)
-        v_contract = await self.get_contract(v_addr, abi.vtoken)
+        comp_contract = await self.get_async_contract(self.comptroller_addr, abi.comptroller)
+        v_contract = await self.get_async_contract(v_addr, abi.vtoken)
 
         # 2. 获取 vToken 信息
         v_symbol = await v_contract.functions.symbol().call()
@@ -205,7 +215,7 @@ class VenusClient:
             underlying_decimal = 18
             is_native = True
         else:
-            u_contract = await self.get_contract(underlying_addr, abi.erc20_abi)
+            u_contract = await self.get_async_contract(underlying_addr, abi.erc20_abi)
             underlying_decimal = await u_contract.functions.decimals().call()
             raw_symbol = await u_contract.functions.symbol().call()
             symbol = raw_symbol.replace(" ", "")  # 某些代币符号带空格
@@ -265,8 +275,8 @@ class VenusClient:
     async def wait_for_transaction_receipt(self, tx_hash, timeout=60) -> TxReceipt:
         return await self._async_w3.eth.wait_for_transaction_receipt(tx_hash, timeout=timeout)
 
-    async def get_transaction_count(self) -> int:
-        return await self._async_w3.eth.get_transaction_count(self.to_checksum_address(self.account_address), 'pending')
+    def get_transaction_count(self) -> int:
+        return self._w3.eth.get_transaction_count(self.to_checksum_address(self.account_address), 'pending')
 
     async def send_private_transaction(self, signed_tx):
         """
@@ -333,7 +343,7 @@ class VenusClient:
                 else:
                     return result['result'].get('bundle_hash')
 
-    async def create_alpha_liquidation_tx(self,
+    def create_alpha_liquidation_tx(self,
                                           pair_address: str,
                                           borrower: str,
                                           amount: int,
@@ -361,9 +371,9 @@ class VenusClient:
         if not self.private_key:
             raise ValueError("Private key is required for sending transactions.")
 
-        alpha_contract = await self.get_contract(config.CONTRACT_ADDR, abi.contract_abi)
+        alpha_contract = self.get_contract(config.CONTRACT_ADDR, abi.contract_abi)
 
-        nonce = await self.get_transaction_count()
+        nonce = self.get_transaction_count()
 
         params = {
             "borrower": self.to_checksum_address(borrower),
@@ -377,21 +387,21 @@ class VenusClient:
             "cUnd": self.to_checksum_address(collateral_underlying_address),
         }
 
-        tx = await alpha_contract.functions.execute(
+        tx = alpha_contract.functions.execute(
             self.to_checksum_address(pair_address),
             params
         ).build_transaction({
             'from': self.account_address,
             'nonce': nonce,
             'gas': 1000000,  # 新合约逻辑复杂，Gas Limit 建议给足
-            'gasPrice': int(await self.get_gas_price() * 1.1),
+            'gasPrice': int(self.get_gas_price() * 1.1),
             'chainId': 56
         })
 
-        signed_tx = await self._async_w3.eth.account.sign_transaction(tx, self.private_key)
+        signed_tx = self._w3.eth.account.sign_transaction(tx, self.private_key)
         return signed_tx
 
-    async def simulate_liquidation_tx(self,
+    def simulate_liquidation_tx(self,
                                       pair_address,
                                       borrower: str,
                                       amount: int,
@@ -420,21 +430,20 @@ class VenusClient:
         if not self.private_key:
             raise ValueError("Private key is required for sending transactions.")
         
-        alpha_contract = await self.get_contract(config.CONTRACT_ADDR, abi.contract_abi)
+        alpha_contract = self.get_contract(config.CONTRACT_ADDR, abi.contract_abi)
 
-        params = {
-            "borrower": self.to_checksum_address(borrower),
-            "repayAmount": amount,
-            "vDebt": self.to_checksum_address(vdebt_address),
-            "vCollateral": self.to_checksum_address(vcollateral_address),
-            "path": path,
-            "maxInput": pay_redeem_amount,
-            "minProfit": min_profit,
-            "dUnd": self.to_checksum_address(debt_underlying_address),
-            "cUnd": self.to_checksum_address(collateral_underlying_address),
-        }
-
-        await alpha_contract.functions.execute(
+        params = (
+            self.to_checksum_address(borrower),
+            amount,
+            self.to_checksum_address(vdebt_address),
+            self.to_checksum_address(vcollateral_address),
+            path,
+            pay_redeem_amount,
+            min_profit,
+            self.to_checksum_address(debt_underlying_address),
+            self.to_checksum_address(collateral_underlying_address),
+        )
+        alpha_contract.functions.execute(
             self.to_checksum_address(pair_address),
             params
         ).call({'from': self.account_address})
@@ -464,10 +473,10 @@ class VenusClient:
         if not self.private_key:
             raise ValueError("Private key is required for sending transactions.")
 
-        v_contract = await self.get_contract(vtoken_debt_address, abi.vtoken)
+        v_contract = self.get_contract(vtoken_debt_address, abi.vtoken)
 
         # 自动管理 Nonce
-        nonce = await self.get_transaction_count()
+        nonce = self.get_transaction_count()
 
         tx_params = {}
 
@@ -491,7 +500,7 @@ class VenusClient:
             'from': self.account_address,
             'nonce': nonce,
             'gas': int(gas_limit * 1.2),  # 20% 冗余
-            'gasPrice': int(await self.get_gas_price() * gas_multiplier),
+            'gasPrice': int(self.get_gas_price() * gas_multiplier),
             'chainId': 56
         })
 
@@ -506,7 +515,7 @@ class VenusClient:
         """
 
         # 使用 ERC20 ABI 实例化底层代币
-        token_contract = await self.get_contract(underlying_addr, abi.erc20_abi)
+        token_contract = await self.get_async_contract(underlying_addr, abi.erc20_abi)
         allowance = await token_contract.functions.allowance(
             self.to_checksum_address(self.account_address), self.to_checksum_address(vtoken_addr)).call()
 

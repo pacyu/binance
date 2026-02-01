@@ -61,6 +61,30 @@ class Analyzer:
         }
         return report
 
+    async def analyze_users(self, user_address_list, prices):
+        users = [key.split(':')[1] for key in await self._db.get_all_users(f"user_profile:*")]
+        user_address_list = list(filter(lambda x: x not in users, user_address_list))
+        user_profiles = await self.get_users_snapshot(user_address_list)
+        risky_reports = []
+        for user_address, user_profile in user_profiles.items():
+
+            if not user_profile:
+                continue
+
+            hf = self.calculate_hf(user_profile, prices)
+            if hf < 1.3:
+                await self._db.update_user_hf_in_order('high_risk_queue', {user_address: hf})
+
+            await self._db.update_user_profile(f"user_profile:{user_address}", user_profile)
+
+            report = {
+                "user_address": user_address,
+                "health_factor": hf,
+                "is_liquidatable": hf < 1.02,
+            }
+            risky_reports.append(report)
+        return risky_reports
+
     async def get_user_snapshot(self, user_address):
         results = await self._client.get_account_snapshot([user_address])
         user_profile = {}
