@@ -185,7 +185,7 @@ class VenusClient:
     async def get_pair(self, address0: str, address1: str) -> str:
         contract = await self.get_async_contract(config.PANCAKE_FACTORY_ADDR, abi.pair_abi)
         return await contract.functions.getPair(self.to_checksum_address(address0),
-                                          self.to_checksum_address(address1)).call()
+                                                self.to_checksum_address(address1)).call()
 
     async def get_reserves(self, address: str) -> Tuple:
         contract = await self.get_async_contract(address, abi.reserves_abi)
@@ -344,16 +344,16 @@ class VenusClient:
                     return result['result'].get('bundle_hash')
 
     def create_alpha_liquidation_tx(self,
-                                          pair_address: str,
-                                          borrower: str,
-                                          amount: int,
-                                          vdebt_address: str,
-                                          vcollateral_address: str,
-                                          path: List[str],
-                                          pay_redeem_amount: int,
-                                          min_profit: int,
-                                          debt_underlying_address: str,
-                                          collateral_underlying_address: str) -> SignedTx:
+                                    pair_address: str,
+                                    borrower: str,
+                                    amount: int,
+                                    vdebt_address: str,
+                                    vcollateral_address: str,
+                                    path: List[str],
+                                    pay_redeem_amount: int,
+                                    min_profit: int,
+                                    debt_underlying_address: str,
+                                    collateral_underlying_address: str) -> SignedTx:
         """
         调用我的智能合约发送清算交易。
 
@@ -375,17 +375,17 @@ class VenusClient:
 
         nonce = self.get_transaction_count()
 
-        params = {
-            "borrower": self.to_checksum_address(borrower),
-            "repayAmount": amount,
-            "vDebt": self.to_checksum_address(vdebt_address),
-            "vCollateral": self.to_checksum_address(vcollateral_address),
-            "path": path,
-            "maxInput": pay_redeem_amount,
-            "minProfit": min_profit,
-            "dUnd": self.to_checksum_address(debt_underlying_address),
-            "cUnd": self.to_checksum_address(collateral_underlying_address),
-        }
+        params = (
+            self.to_checksum_address(borrower),
+            amount,
+            self.to_checksum_address(vdebt_address),
+            self.to_checksum_address(vcollateral_address),
+            path,
+            pay_redeem_amount,
+            min_profit,
+            self.to_checksum_address(debt_underlying_address),
+            self.to_checksum_address(collateral_underlying_address),
+        )
 
         tx = alpha_contract.functions.execute(
             self.to_checksum_address(pair_address),
@@ -402,16 +402,16 @@ class VenusClient:
         return signed_tx
 
     def simulate_liquidation_tx(self,
-                                      pair_address,
-                                      borrower: str,
-                                      amount: int,
-                                      vdebt_address: str,
-                                      vcollateral_address: str,
-                                      path: List[str],
-                                      pay_redeem_amount: int,
-                                      min_profit: int,
-                                      debt_underlying_address: str,
-                                      collateral_underlying_address: str) -> bool:
+                                pair_address,
+                                borrower: str,
+                                amount: int,
+                                vdebt_address: str,
+                                vcollateral_address: str,
+                                path: List[str],
+                                pay_redeem_amount: int,
+                                min_profit: int,
+                                debt_underlying_address: str,
+                                collateral_underlying_address: str) -> bool:
         """
         模拟发送清算交易。
 
@@ -429,7 +429,7 @@ class VenusClient:
         """
         if not self.private_key:
             raise ValueError("Private key is required for sending transactions.")
-        
+
         alpha_contract = self.get_contract(config.CONTRACT_ADDR, abi.contract_abi)
 
         params = (
@@ -523,7 +523,7 @@ class VenusClient:
         if allowance < 10 ** 8 * 10 ** 18:
             max_uint256 = 2 ** 256 - 1
             tx = await (await token_contract.functions.approve(self.to_checksum_address(vtoken_addr), max_uint256)
-            .build_transaction({
+                        .build_transaction({
                 'from': self.account_address,
                 'nonce': current_nonce,
                 'gasPrice': self.get_gas_price()
