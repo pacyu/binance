@@ -394,7 +394,7 @@ class VenusClient:
             'from': self.account_address,
             'nonce': nonce,
             'gas': 1000000,  # 新合约逻辑复杂，Gas Limit 建议给足
-            'gasPrice': int(self.get_gas_price() * 1.1),
+            'gasPrice': int(config.GAS_PRICE * 1.1),
             'chainId': 56
         })
 
@@ -443,6 +443,7 @@ class VenusClient:
             self.to_checksum_address(debt_underlying_address),
             self.to_checksum_address(collateral_underlying_address),
         )
+
         alpha_contract.functions.execute(
             self.to_checksum_address(pair_address),
             params
@@ -500,7 +501,7 @@ class VenusClient:
             'from': self.account_address,
             'nonce': nonce,
             'gas': int(gas_limit * 1.2),  # 20% 冗余
-            'gasPrice': int(self.get_gas_price() * gas_multiplier),
+            'gasPrice': int(config.GAS_PRICE * gas_multiplier),
             'chainId': 56
         })
 
@@ -526,7 +527,7 @@ class VenusClient:
                         .build_transaction({
                 'from': self.account_address,
                 'nonce': current_nonce,
-                'gasPrice': self.get_gas_price()
+                'gasPrice': config.GAS_PRICE
             }))
 
             signed_tx = await self._async_w3.eth.account.sign_transaction(tx, self.private_key)
