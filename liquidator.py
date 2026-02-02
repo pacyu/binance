@@ -1,12 +1,10 @@
 import asyncio
-
-import web3.exceptions
-
 import config
 from logging import Logger
 from analyzer import Analyzer
 from hexbytes import HexBytes
 from typing import List
+import web3.exceptions
 from binance.redis_client import RedisClient
 from binance.web3client import VenusClient
 from utils import usd_to_wei, calc_slippage
@@ -191,7 +189,7 @@ class Liquidator:
         estimated_gas = 1000000  # 清算交易通常消耗较多 gas
         gas_cost_bnb = (gas_price_wei * estimated_gas) / 1e18
         bnb_price = prices.get(config.BNB_VTOKEN_ADDRESS, config.BNB_PRICE_DEFAULT)
-        gas_cost_usd = gas_cost_bnb * bnb_price[config.BNB_VTOKEN_ADDRESS] / 1e18
+        gas_cost_usd = gas_cost_bnb * bnb_price / 1e18
 
         if best_debt['underlying_address'] != config.WBNB_VTOKEN_UNDER_ADDRESS:
             pair_address = await self._db.get_pair(f"pair:{best_debt['underlying_address']}",
