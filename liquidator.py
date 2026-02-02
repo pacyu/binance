@@ -187,10 +187,10 @@ class Liquidator:
                                       best_debt['underlying_decimal'])
 
         # 1. 预估 gas 成本
-        gas_price_wei = self._client.get_gas_price()
+        gas_price_wei = config.GAS_PRICE
         estimated_gas = 1000000  # 清算交易通常消耗较多 gas
         gas_cost_bnb = (gas_price_wei * estimated_gas) / 1e18
-        bnb_price = await self._client.get_oracle_price([config.BNB_VTOKEN_ADDRESS])
+        bnb_price = prices.get(config.BNB_VTOKEN_ADDRESS, config.BNB_PRICE_DEFAULT)
         gas_cost_usd = gas_cost_bnb * bnb_price[config.BNB_VTOKEN_ADDRESS] / 1e18
 
         if best_debt['underlying_address'] != config.WBNB_VTOKEN_UNDER_ADDRESS:
