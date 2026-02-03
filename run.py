@@ -37,7 +37,7 @@ class Run:
         self.engine = Liquidator(self._client, self._db, self.analyzer, self.Log)
         self._event = None
         self._task_queue = asyncio.PriorityQueue(maxsize=2000)
-        self._semaphore = asyncio.Semaphore(100)
+        self._semaphore = asyncio.Semaphore(20)
         self._pending_users = set()
         self._prior_counter = {'user_event': 0, 'price_update': 0, 'oracle_update': 0}
 
@@ -74,13 +74,13 @@ class Run:
 
             try:
                 if task["type"] == "user_event":
-                    asyncio.create_task(self._handle_user_event(task))
+                    await self._handle_user_event(task)
 
                 elif task["type"] == "price_update":
-                    asyncio.create_task(self._handle_price_update(task))
+                    await self._handle_price_update(task)
 
                 elif task["type"] == "oracle_update":
-                    asyncio.create_task(self._handle_oracle_update(task))
+                    await self._handle_oracle_update(task)
 
             except Exception as e:
                 self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}, 任务: {task}")
@@ -106,9 +106,8 @@ class Run:
         risky_reports = await self.analyzer.analyze_users(user_address_list, prices)
 
         async def _process_report(report):
-            async with self._semaphore:
-                if report['is_liquidatable']:
-                    await self.engine.handle_liquidation(report)
+            if report['is_liquidatable']:
+                await self.engine.handle_liquidation(report)
 
         batch_size = 20
         for i in range(0, len(risky_reports), batch_size):
@@ -127,7 +126,7 @@ class Run:
             return
 
         tasks = [
-            asyncio.create_task(self._process_user(addr, prices, oracle_tx_hash))
+            self._process_user(addr, prices, oracle_tx_hash)
             for addr in user_address_list
         ]
         await asyncio.gather(*tasks)
@@ -243,7 +242,7 @@ class Run:
             batch_size = 600
 
             tasks = [
-                asyncio.create_task(self._process_users(user_address_list[i: i + batch_size], self._binance_price))
+                self._process_users(user_address_list[i: i + batch_size], self._binance_price)
                 for i in range(0, len(user_address_list), batch_size)
             ]
 
@@ -262,7 +261,7 @@ class Run:
                 continue
 
             tasks = [
-                asyncio.create_task(self._process_user(addr, self._binance_price))
+                self._process_user(addr, self._binance_price)
                 for addr in user_address_list
             ]
             await asyncio.gather(*tasks)
@@ -410,13 +409,15 @@ class Run:
         await self._load_vtoken_cache_()
         await self._init_price_()
 
+        workers = [asyncio.create_task(self.listen_worker()) for _ in range(config.WORKER_NUM)]
+
         await asyncio.gather(
             self.full_scan(),
             self.poll_risk_check(),
             self.listen_user_events(),
             self.listen_binance_price_updates(),
             # self.listen_mempool(),
-            self.listen_worker(),
+            *workers,
         )
 
 if __name__ == '__main__':
