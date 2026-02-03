@@ -28,6 +28,7 @@ class Liquidator:
 
     async def handle_liquidation(self, report, oracle_tx_hash: str=None):
         user_addr = report['user_address']
+
         if await self._db.should_skip(f"liquidator:skip:{user_addr}"):
             return
 
@@ -42,21 +43,10 @@ class Liquidator:
         error, liquidity, shortfall = asset[user_addr]
 
         if shortfall > 0:
-            liq = await self.is_liquidation(user_addr, user_profile, prices, self.incentive_rate)
-            if liq['is_profitable']:
-                status = await self.execute_liquidation(
-                    liq['pair_address'],
-                    user_addr,
-                    liq['repay_amount'],
-                    liq['best_path'],
-                    liq['best_debt'],
-                    liq['best_collateral'],
-                    liq['pay_redeem_amount'],
-                    liq['min_profit'],
-                    liq['net_profit'],
-                    oracle_tx_hash
-                )
-                self.Log.info(f"liquidation status: {status}")
+            liquidation_report = await self.is_liquidation(user_addr, user_profile, prices, self.incentive_rate)
+            if liquidation_report['is_profitable']:
+                status = await self.execute_liquidation(user_addr, liquidation_report, oracle_tx_hash)
+                self.Log.info(f"Liquidation status: {status}")
 
         await self._db.update_user_profile(f"user_profile:{user_addr}", user_profile)
         await self._db.update_user_hf_in_order("high_risk_queue", {user_addr: hf})
@@ -169,7 +159,7 @@ class Liquidator:
         repay_usd = min(debt_value_limited, collateral_value_limited)
         return repay_amount, repay_usd
 
-    async def is_liquidation(self, user_addr, user_profile, prices, incentive_rate=1.1):
+    async def is_liquidation(self, user_addr: str, user_profile: dict, prices: dict, incentive_rate=1.1) -> dict:
         best_debt, best_collateral = self.find_best_liquidation_asset(user_profile, prices)
         if not best_debt or not best_collateral:
             return {"is_profitable": False, "best_debt": {}, "best_collateral": {}, "repay_amount": 0}
@@ -203,7 +193,8 @@ class Liquidator:
                                                         best_collateral['underlying_address'],
                                                         best_debt['underlying_address'],
                                                         repay_amount_wei)
-        repay_cost_usd = (pay_redeem_amount_wei * prices[best_collateral['v_addr']]) / 10**(18 + best_collateral['underlying_decimal'])
+        repay_cost_usd = ((pay_redeem_amount_wei * prices[best_collateral['v_addr']])
+                          / 10**(18 + best_collateral['underlying_decimal']))
 
         # 3. 毛利润
         gross_profit_usd = repay_usd * (incentive_rate - 1)
@@ -211,17 +202,19 @@ class Liquidator:
         # 4. 净利润
         net_profit = gross_profit_usd - repay_cost_usd - gas_cost_usd
 
-        self.Log.info(f"--- ⚖️ 用户 {user_addr} 清算决策报告 ---")
-        self.Log.info(f"🔹 待清算金额:  ${repay_usd} USD")
-        self.Log.info(f"💰 理论毛利:    ${gross_profit_usd} USD")
-        self.Log.info(f"⛽ Gas 成本:   ${gas_cost_usd} USD (约 {gas_cost_bnb:.8f} BNB)")
-        self.Log.info(f"💴 预计收益:    ${net_profit} USD")
-        self.Log.info(f"----------------------")
-
         if net_profit < config.MIN_PROFIT_TOLERANCE:
-            await self._db.mark_as_non_liquidable(f"liquidator:skip:{user_addr}", config.COOLDOWN_TTL_DAY, "low_profit")
+            await self._db.mark_as_non_liquidable(f"liquidator:skip:{user_addr}",
+                                                  config.COOLDOWN_TTL_DAY,
+                                                  f"low_profit: {net_profit} USD")
+        else:
+            self.Log.info(f"--- ⚖️ 用户 {user_addr} 清算决策报告 ---\n"
+                        f"🔹 待清算金额:  ${repay_usd} USD\n"
+                        f"💰 理论毛利:    ${gross_profit_usd} USD\n"
+                        f"⛽ Gas 成本:   ${gas_cost_usd} USD (约 {gas_cost_bnb:.8f} BNB)\n"
+                        f"💴 预计收益:    ${net_profit} USD\n"
+                        f"----------------------")
 
-        return {
+        liquidation_report = {
             "is_profitable": net_profit >= config.MIN_PROFIT_TOLERANCE, # 利润大于 1 刀
             "repay_amount": repay_amount_wei,
             "pair_address": pair_address,
@@ -232,20 +225,19 @@ class Liquidator:
             "min_profit": min_profit_wei,
             "net_profit": net_profit,
         }
+        return liquidation_report
 
-    async def execute_liquidation(self,
-                                  pair_address,
-                                  user_address,
-                                  repay_amount_wei,
-                                  path,
-                                  debt,
-                                  collateral,
-                                  pay_redeem_amount_wei,
-                                  min_profit_wei,
-                                  net_profit,
-                                  oracle_tx_hash: str = None) -> bool:
+    async def execute_liquidation(self, user_address: str, liquidation_report: dict, oracle_tx_hash: str = None) -> bool:
+        pair_address = liquidation_report['pair_address']
+        repay_amount_wei = liquidation_report['repay_amount']
+        path = liquidation_report['best_path']
+        debt = liquidation_report['best_debt']
+        collateral = liquidation_report['best_collateral']
+        pay_redeem_amount_wei = liquidation_report['pay_redeem_amount']
+        min_profit_wei = liquidation_report['min_profit']
+        net_profit = liquidation_report['net_profit']
 
-        self.Log.info(f"负债: {debt['symbol']}, 抵押品: {collateral['symbol']}")
+        self.Log.info(f"用户 {user_address}, 负债: {debt['symbol']}, 抵押品: {collateral['symbol']}")
 
         try:
             self._client.simulate_liquidation_tx(
