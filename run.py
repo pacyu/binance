@@ -37,7 +37,7 @@ class Run:
         self.engine = Liquidator(self._client, self._db, self.analyzer, self.Log)
         self._event = None
         self._task_queue = asyncio.PriorityQueue(maxsize=2000)
-        self._semaphore = asyncio.Semaphore(20)
+        self._semaphore = asyncio.Semaphore(30)
         self._pending_users = set()
         self._prior_counter = {'user_event': 0, 'price_update': 0, 'oracle_update': 0}
 
@@ -109,7 +109,7 @@ class Run:
             if report['is_liquidatable']:
                 await self.engine.handle_liquidation(report)
 
-        batch_size = 20
+        batch_size = 50
         for i in range(0, len(risky_reports), batch_size):
             await asyncio.gather(*(_process_report(report) for report in risky_reports[i:i + batch_size]))
 
