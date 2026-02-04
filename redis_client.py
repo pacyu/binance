@@ -119,6 +119,15 @@ class RedisClient:
     async def get_last_block(self, name):
         return await self._db.get(name)
 
+    async def update_binance_price(self, name, key, value):
+        await self._db.hset(name, key, value)
+
+    async def get_binance_price(self, name, key):
+        return await self._db.hget(name, key)
+
+    async def get_binance_prices(self, name):
+        return await self._db.hgetall(name)
+
     async def scan(self, cursor, match, count):
         return await self._db.scan(cursor, match, count)
 

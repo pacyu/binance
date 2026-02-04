@@ -145,8 +145,8 @@ event_abi = [
 },{
     "anonymous": False,
     'inputs': [
-        {'type': 'address', 'name': 'user', 'indexed': False}, # 实际进入市场的用户账户
-        {'type': 'address', 'name': 'market', 'indexed': False}, # 进入的vToken市场地址
+        {'type': 'address', 'name': 'account', 'indexed': True}, # 实际进入市场的用户账户
+        {'type': 'address', 'name': 'vToken', 'indexed': True}, # 进入的vToken市场地址
     ],
     'name': 'MarketEntered',
     'type': 'event'

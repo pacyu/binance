@@ -5,8 +5,8 @@ from analyzer import Analyzer
 from hexbytes import HexBytes
 from typing import List
 import web3.exceptions
-from binance.redis_client import RedisClient
-from binance.web3client import VenusClient
+from redis_client import RedisClient
+from web3client import VenusClient
 from utils import usd_to_wei, calc_slippage
 
 class Liquidator:
@@ -26,30 +26,51 @@ class Liquidator:
     def set_execution_lock(self, lock):
         self._execution_lock = lock
 
-    async def handle_liquidation(self, report, oracle_tx_hash: str=None):
-        user_addr = report['user_address']
-
-        if await self._db.should_skip(f"liquidator:skip:{user_addr}"):
-            return
-
-        user_profile = await self.analyzer.get_user_snapshot(user_addr)
-        if not user_profile:
-            await self._db.remove_user_profile(f"user_profile:{user_addr}")
-            return
-
-        prices = await self._client.get_oracle_price(list(user_profile.keys()))
-        hf = self.analyzer.calculate_hf(user_profile, prices)
-        asset = await self._client.get_user_liquidity([user_addr])
-        error, liquidity, shortfall = asset[user_addr]
+    async def _handle_helper(self, user_address: str, user_profile: dict, assets: dict, prices: dict, health_factor: float, oracle_tx_hash: str=None):
+        self.Log.info(f"正在处理用户: {user_address}")
+        error, liquidity, shortfall = assets[user_address]
 
         if shortfall > 0:
-            liquidation_report = await self.is_liquidation(user_addr, user_profile, prices, self.incentive_rate)
+            liquidation_report = await self.is_liquidation(user_address, user_profile, prices, self.incentive_rate)
             if liquidation_report['is_profitable']:
-                status = await self.execute_liquidation(user_addr, liquidation_report, oracle_tx_hash)
-                self.Log.info(f"Liquidation status: {status}")
+                status = await self.execute_liquidation(user_address, liquidation_report, oracle_tx_hash)
+                self.Log.info(f"清算结果状态: {status}")
+            else:
+                self.Log.info(f"用户不值得清算! ")
+        else:
+            self.Log.info(f"用户无法被清算! 账户流动性:{liquidity} | 缺口: {shortfall}")
 
-        await self._db.update_user_profile(f"user_profile:{user_addr}", user_profile)
-        await self._db.update_user_hf_in_order("high_risk_queue", {user_addr: hf})
+        await self._db.update_user_profile(f"user_profile:{user_address}", user_profile)
+        await self._db.update_user_hf_in_order("high_risk_queue", {user_address: health_factor})
+
+    async def handle_multi_liquidation(self, user_address_list, prices):
+        risky_reports = await self.analyzer.analyze_users(user_address_list, prices)
+        assets = await self._client.get_user_liquidity(user_address_list)
+        for risky_report in risky_reports:
+            user_address = risky_report['user_address']
+            hf = risky_report['health_factor']
+            user_profile = risky_report['user_profile']
+            await self._handle_helper(user_address, user_profile, assets, prices, hf)
+
+    async def handle_liquidation(self, report, oracle_tx_hash: str=None):
+        user_address = report['user_address']
+
+        if await self._db.should_skip(f"liquidator:skip:{user_address}"):
+            return
+
+        user_profile = await self.analyzer.get_user_snapshot([user_address])
+
+        if not user_profile:
+            return
+
+        if not user_profile[user_address]:
+            await self._db.remove_user_profile(f"user_profile:{user_address}")
+            return
+
+        prices = await self._client.get_oracle_price(list(user_profile[user_address].keys()))
+        hf = self.analyzer.calculate_hf(user_profile[user_address], prices)
+        assets = await self._client.get_user_liquidity([user_address])
+        await self._handle_helper(user_address, user_profile[user_address], assets, prices, hf, oracle_tx_hash)
 
     async def get_slippage(self, pair_addr, v_address, amount):
         reserves, token0, token1 = await self._client.get_reserves(pair_addr)
@@ -204,7 +225,7 @@ class Liquidator:
 
         if net_profit < config.MIN_PROFIT_TOLERANCE:
             await self._db.mark_as_non_liquidable(f"liquidator:skip:{user_addr}",
-                                                  config.COOLDOWN_TTL_DAY,
+                                                  config.COOLDOWN_TTL_HOUR,
                                                   f"low_profit: {net_profit} USD")
         else:
             self.Log.info(f"--- ⚖️ 用户 {user_addr} 清算决策报告 ---\n"

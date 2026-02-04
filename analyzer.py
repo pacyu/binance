@@ -1,13 +1,11 @@
-from logging import Logger
-from binance.redis_client import RedisClient
-from binance.web3client import VenusClient
+from redis_client import RedisClient
+from web3client import VenusClient
 
 
 class Analyzer:
-    def __init__(self, client: VenusClient, db: RedisClient, logger: Logger=None):
+    def __init__(self, client: VenusClient, db: RedisClient):
         self._client = client
         self._db = db
-        self.Log = logger
         self._vtoken_cache = None
 
     def set_vtoken_cache(self, vtoken_cache):
@@ -16,7 +14,7 @@ class Analyzer:
     def get_vtoken_cache(self):
         return self._vtoken_cache
 
-    def calculate_hf(self, user_profile, prices):
+    def calculate_hf(self, user_profile: dict, prices: dict) -> float:
         total_collateral_usd = 0
         total_debt_usd = 0
 
@@ -39,10 +37,10 @@ class Analyzer:
             return hf
         return float('inf')
 
-    async def analyze_user(self, user_address, prices):
+    async def analyze_user(self, user_address: str, prices: dict) -> dict:
         user_profile = await self._db.get_user_profile(f"user_profile:{user_address}")
         if not user_profile:
-            user_profile = await self.get_user_snapshot(user_address)
+            user_profile = await self.get_user_snapshot([user_address])
             if not user_profile:
                 return {
                     "user_address": '',
@@ -57,14 +55,12 @@ class Analyzer:
         report = {
             "user_address": user_address,
             "health_factor": hf,
-            "is_liquidatable": hf < 1.02,
+            "is_liquidatable": hf < 1.05,
         }
         return report
 
-    async def analyze_users(self, user_address_list, prices):
-        users = [key.split(':')[1] for key in await self._db.get_all_users(f"user_profile:*")]
-        user_address_list = list(filter(lambda x: x not in users, user_address_list))
-        user_profiles = await self.get_users_snapshot(user_address_list)
+    async def analyze_users(self, user_address_list: list, prices: dict) -> list:
+        user_profiles = await self.get_user_snapshot(user_address_list)
         risky_reports = []
         for user_address, user_profile in user_profiles.items():
 
@@ -80,37 +76,13 @@ class Analyzer:
             report = {
                 "user_address": user_address,
                 "health_factor": hf,
-                "is_liquidatable": hf < 1.02,
+                "is_liquidatable": hf < 1.05,
+                "user_profile": user_profile,
             }
             risky_reports.append(report)
         return risky_reports
 
-    async def get_user_snapshot(self, user_address):
-        results = await self._client.get_account_snapshot([user_address])
-        user_profile = {}
-        for addr, snapshot in results.items():
-            user_addr, v_addr = addr.split('|')
-            err, vtoken_bal, borrow_bal, exchange_rate = snapshot
-
-            if err != 0:
-                continue
-
-            # 计算底层资产抵押数量 = vToken余额 * 兑换率 / 1e18
-            collateral_underlying = (vtoken_bal * exchange_rate) / 1e18
-
-            # 借款余额已经是底层资产单位了
-            debt_underlying = borrow_bal
-
-            # 计算净头寸 (带符号)
-            # 这里假设只要有存款就视为抵押，实际上需要判断是否入库 (isListed)，但清算中通常直接取净值
-            amount = (collateral_underlying - debt_underlying) / 1e18
-
-            if abs(amount) > 1e-9:  # 过滤极小值
-                user_profile[v_addr] = amount
-            await self._db.update_user_asset_map_list(f'asset:users:{v_addr}', user_address)
-        return user_profile
-
-    async def get_users_snapshot(self, user_address_list):
+    async def get_user_snapshot(self, user_address_list: list) -> dict:
         results = await self._client.get_account_snapshot(user_address_list)
         user_profile = {}
         for addr, snapshot in results.items():
@@ -137,19 +109,3 @@ class Analyzer:
                     user_profile[user_addr][v_addr] = amount
             await self._db.update_user_asset_map_list(f'asset:users:{v_addr}', user_addr)
         return user_profile
-
-    async def analyze_liquidable_users(self, user_address_list):
-        results = await self._client.get_user_liquidity(user_address_list)
-        for user_address, (error, liquidity, shortfall) in results.items():
-            shortfall_usd = shortfall / 10 ** 18
-            liq_usd = liquidity / 10 ** 18
-
-            if shortfall_usd > 0:
-                self.Log.info(f"🚨 发现可清算目标: {user_address} | 欠费金额: ${shortfall_usd:.2f}")
-            #     self._db.set(f"target:{user_address}", shortfall_usd)
-            elif liq_usd < 500:  # 账户剩余额度不足 500 USD
-                self.Log.info(f"⚠️ [高风险] 用户: {user_address} | 剩余额度: ${liq_usd:.2f}")
-            #     self._db.set(f'user_profile:{user_address}', item)
-            else:
-                self.Log.info(f"✅ [安全] 用户: {user_address} | 剩余额度: ${liq_usd:.2f}")
-            #     self._db.set(f"liquidity:{user_address}", liq_usd)

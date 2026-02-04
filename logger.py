@@ -3,7 +3,7 @@ import logging
 from logging.handlers import TimedRotatingFileHandler
 
 class Logger:
-    def __init__(self):
+    def __init__(self, log_name):
         # 创建日志目录
         if not os.path.exists('logs'):
             os.makedirs('logs')
@@ -23,7 +23,7 @@ class Logger:
 
         # 2. 文件输出 (按天滚动，保留最近1天)
         file_handler = TimedRotatingFileHandler(
-            filename='logs/bot.log',
+            filename=f'logs/{log_name}',
             when='midnight',
             interval=1,
             backupCount=1,
