@@ -18,7 +18,7 @@ class MonitorRiskyUser:
         bloxroute_auth_header = os.getenv('BLOXROUTE_AUTH_HEADER')
 
         self._db = RedisClient()
-        self._client = VenusClient(config.ANKR_RPC_URL,
+        self._client = VenusClient(config.ANKR_RPC_URL2,
                                    config.VENUS_CORE_COMPTROLLER_ADDR,
                                    private_key,
                                    bloxroute_api_key,
@@ -59,7 +59,7 @@ class MonitorRiskyUser:
 
         prices = await self._client.get_oracle_price(list(self._vtoken_cache.keys()))
 
-        batch_size = 100
+        batch_size = 60
 
         tasks = [
             self._process_users(user_address_list[i:i + batch_size], prices)
