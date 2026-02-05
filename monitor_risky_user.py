@@ -18,7 +18,7 @@ class MonitorRiskyUser:
         bloxroute_auth_header = os.getenv('BLOXROUTE_AUTH_HEADER')
 
         self._db = RedisClient()
-        self._client = VenusClient(config.ALCHEMY_BSC_RPC_URL,
+        self._client = VenusClient(config.ANKR_RPC_URL,
                                    config.VENUS_CORE_COMPTROLLER_ADDR,
                                    private_key,
                                    bloxroute_api_key,
@@ -43,10 +43,10 @@ class MonitorRiskyUser:
             self._vtoken_cache[token['address']] = token
 
     async def _process_users(self, user_address_list, prices):
-        try:
+        # try:
             await self.engine.handle_multi_liquidation(user_address_list, prices)
-        except Exception as e:
-            self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}")
+        # except Exception as e:
+        #     self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}")
 
     async def risky_user_check(self):
         user_address_list = await self._db.get_user_hf_by_score('high_risk_queue', 0, float('inf'))

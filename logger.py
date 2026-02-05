@@ -1,6 +1,6 @@
 import os
 import logging
-from logging.handlers import TimedRotatingFileHandler
+from logging.handlers import RotatingFileHandler
 
 class Logger:
     def __init__(self, log_name):
@@ -22,10 +22,9 @@ class Logger:
         console_handler.setFormatter(formatter)
 
         # 2. 文件输出 (按天滚动，保留最近1天)
-        file_handler = TimedRotatingFileHandler(
+        file_handler = RotatingFileHandler(
             filename=f'logs/{log_name}',
-            when='midnight',
-            interval=1,
+            maxBytes=10 * 1024 * 1024,
             backupCount=1,
             encoding='utf-8'
         )
