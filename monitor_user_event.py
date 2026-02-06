@@ -52,9 +52,12 @@ class MonitorUserEvent:
             self._vtoken_cache[token['address']] = token
 
     async def _process_and_analyze(self, user_address):
-        user_profile = await self.analyzer.get_user_snapshot([user_address])
         await self._db.save_user_wallet("wallet_address", user_address)
-        await self._db.update_user_profile(f"user_profile:{user_address}", user_profile[user_address])
+        if await self._db.exist_user_profile(f"user_profile:{user_address}"):
+            return
+        user_profile = await self.analyzer.get_user_snapshot([user_address])
+        if user_profile and user_profile[user_address]:
+            await self._db.update_user_profile(f"user_profile:{user_address}", user_profile[user_address])
 
     async def _handle_user_event(self, task):
         user_address = task["address"]
@@ -200,8 +203,8 @@ class MonitorUserEvent:
                 if task["type"] == "user_event":
                     await self._handle_user_event(task)
 
-            except Exception as e:
-                self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}, 任务: {task}")
+            # except Exception as e:
+            #     self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}, 任务: {task}")
 
             finally:
                 self._task_queue.task_done()

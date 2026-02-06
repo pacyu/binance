@@ -44,17 +44,17 @@ class RedisClient:
     async def update_user_profile(self, name, user_profile):
         await self._db.hset(name, mapping=user_profile)
 
-    async def get_user_profile(self, name):
-        return await self._db.hgetall(name)
-
-    async def get_all_users(self, name):
-        return await self._db.keys(name)
-
     async def exist_user_profile(self, name):
         return await self._db.exists(name)
 
+    async def get_user_profile(self, name):
+        return await self._db.hgetall(name)
+
     async def remove_user_profile(self, name):
         await self._db.delete(name)
+
+    async def get_all_users(self, name):
+        return await self._db.keys(name)
 
     async def update_exchange_rate(self, name, value):
         await self._db.set(name, value)
