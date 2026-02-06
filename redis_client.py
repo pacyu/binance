@@ -4,9 +4,15 @@ class RedisClient:
     def __init__(self, host='localhost', port=6379, db=0):
         self._db = Redis(host=host, port=port, db=db, decode_responses=True)
 
-    async def save_users(self, name, address_list):
+    async def save_user_wallet(self, name, address):
+        await self._db.sadd(name, address)
+
+    async def save_user_wallets(self, name, address_list):
         await self._db.sadd(name, *address_list)
         print(f"保存成功！库内地址数: {await self._db.scard(name)}")
+
+    async def exist_user_wallet(self, name, wallet_address):
+        return await self._db.sismember(name, wallet_address)
 
     async def update_user_hf_in_order(self, name, item):
         await self._db.zadd(name, item)

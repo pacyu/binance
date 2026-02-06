@@ -15,13 +15,14 @@ class DataManager:
         await self._db.update_last_block('last_block', end_block)
         print(user_address_list)
         if user_address_list:
-            await self._db.save_users("user_address_tab", user_address_list)
+            await self._db.save_user_wallets("wallet_address", user_address_list)
 
     async def update_users_profile(self, user_address_list):
         print('正在初始化用户画像...')
         user_profiles = await self.analyzer.get_users_snapshot(user_address_list)
         for user_address, user_profile in user_profiles.items():
-            if self._db.exist_user_profile(f'user_profile:{user_address}'):
+            await self._db.save_user_wallet("wallet_address", user_address)
+            if await self._db.exist_user_profile(f'user_profile:{user_address}'):
                 continue
 
             if not user_profile:

@@ -5,7 +5,7 @@ import websockets
 from logger import Logger
 from redis_client import RedisClient
 from websockets.exceptions import ConnectionClosedError
-from utils import price_to_wei
+from utils import price_to_wei, get_price_volatility_threshold
 
 
 class MonitorBinance:
@@ -35,7 +35,12 @@ class MonitorBinance:
                         current_price = price_to_wei(data['p'])
                         fluctuation = 1 - last_price / current_price
 
-                        self.Log.info(f"💴 代币: {data['s']} | 价格: {data['p']} | 价格涨跌: {fluctuation * 100:.4f}%")
+                        # 减少日志量
+                        if abs(fluctuation) > get_price_volatility_threshold(current_price):
+                            self.Log.info(f"💴 代币: {data['s']} | 价格: {data['p']} | 价格涨跌: {fluctuation * 100:.4f}%")
+                            # TODO: 去触发批量扫描，发现在这个价格波动下的高风险用户钱包，但还没想好如何处理这些钱包地址，
+                            #  因为重点要等到预言机上的价格和该价格相等时，才能去进行清算处理
+
                         await self._db.update_binance_price(f"binance_price", vtoken_addr, current_price)
 
                         self._binance_price[vtoken_addr] = current_price

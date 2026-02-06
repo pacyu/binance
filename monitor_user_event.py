@@ -51,15 +51,16 @@ class MonitorUserEvent:
             token = json.loads(item)
             self._vtoken_cache[token['address']] = token
 
-    async def _process_and_analyze(self, user_addr):
-        risky_report = {'user_address': user_addr.lower()}
-        await self.engine.handle_liquidation(risky_report)
+    async def _process_and_analyze(self, user_address):
+        user_profile = await self.analyzer.get_user_snapshot([user_address])
+        await self._db.update_user_profile(f"user_profile:{user_address}", user_profile)
 
     async def _handle_user_event(self, task):
-        user_addr = task["address"]
-        await self._process_and_analyze(user_addr)
-        if user_addr in self._pending_users:
-            self._pending_users.remove(user_addr)
+        user_address = task["address"]
+        await self._db.save_user_wallet("wallet_address", user_address)
+        await self._process_and_analyze(user_address)
+        if user_address in self._pending_users:
+            self._pending_users.remove(user_address)
 
     def _process_events_log(self, log):
         vtoken_addr = log['address']
@@ -97,7 +98,7 @@ class MonitorUserEvent:
             decoded = repay_borrow_event.process_log(log)
             payer_addr = decoded['args']['payer']
             user_addr = decoded['args']['borrower']
-            if user_addr in config.BLACKLIST:
+            if payer_addr in config.BLACKLIST:
                 return None
             repay_amount = decoded['args']['repayAmount'] / 1e18
             account_borrows_new = decoded['args']['accountBorrowsNew'] / 1e18
@@ -114,7 +115,7 @@ class MonitorUserEvent:
             decoded = liquidate_borrow_event.process_log(log)
             liquidator_addr = decoded['args']['liquidator']
             user_addr = decoded['args']['borrower']
-            if user_addr in config.BLACKLIST:
+            if liquidator_addr in config.BLACKLIST:
                 return None
             repay_amount = decoded['args']['repayAmount'] / 1e18
             vtoken_collateral_addr = decoded['args']['vTokenCollateral']

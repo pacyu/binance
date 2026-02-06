@@ -10,6 +10,7 @@ from redis_client import RedisClient
 from web3client import VenusClient
 from analyzer import Analyzer
 from liquidator import Liquidator
+from web3.exceptions import TransactionNotFound
 from websockets.exceptions import ConnectionClosedError
 
 
@@ -20,8 +21,8 @@ class MonitorMemPool:
         bloxroute_api_key = os.getenv('BLOXROUTE_API_KEY')
         bloxroute_auth_header = os.getenv('BLOXROUTE_AUTH_HEADER')
 
-        self.Log = Logger('user_event.log')()
-        self._client = VenusClient(config.ANKR_RPC_URL,
+        self.Log = Logger('mempool.log')()
+        self._client = VenusClient(config.ANKR_RPC_URL2,
                                    config.VENUS_CORE_COMPTROLLER_ADDR,
                                    private_key,
                                    bloxroute_api_key,
@@ -78,10 +79,13 @@ class MonitorMemPool:
             oracle_address = tx['to']
             if await self._db.exist_oracle_source(f"oracle:address:{oracle_address}"):
                 result = await self._db.get_oracle_source(f"oracle:address:{oracle_address}")
-                for v_addr in result:
-                    await self._check_opportunity(v_addr, self._pre_onchain_price, tx_hash)
-        except Exception as e:
-            self.Log.debug(f"未找到交易 hash: {e}")
+                self.Log.debug(">>>> 地址:", oracle_address)
+                self.Log.debug(">>>> input:", tx['input'].hex())
+                self.Log.debug(">>>>", result)
+            #     for v_addr in result:
+            #         await self._check_opportunity(v_addr, self._pre_onchain_price, tx_hash)
+        except TransactionNotFound:
+            return
 
     async def listen_mempool(self):
         subscribe_msg = {
@@ -140,3 +144,8 @@ class MonitorMemPool:
 
     def __call__(self, *args, **kwargs):
         asyncio.run(self.run())
+
+
+if __name__ == "__main__":
+    monitor = MonitorMemPool()
+    monitor()

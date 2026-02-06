@@ -34,7 +34,6 @@ def get_binance_symbols() -> list:
         print(f"❌ 获取失败: {e}")
         return []
 
-
 def usd_to_wei(optimal_usd, oracle_price_mantissa, token_decimals) -> int:
     """
     optimal_usd: 你的算法算出的最优美金数 (float/decimal)
