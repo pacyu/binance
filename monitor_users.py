@@ -49,7 +49,7 @@ class MonitorUsers:
             self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}")
 
     async def full_scan(self):
-        user_address_list = list(await self._db.read_by_name('user_address_tab'))
+        user_address_list = list(await self._db.read_by_name('wallet_address'))
 
         if not user_address_list:
             return
