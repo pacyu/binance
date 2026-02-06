@@ -53,7 +53,7 @@ class MonitorUserEvent:
 
     async def _process_and_analyze(self, user_address):
         user_profile = await self.analyzer.get_user_snapshot([user_address])
-        await self._db.update_user_profile(f"user_profile:{user_address}", user_profile)
+        await self._db.update_user_profile(f"user_profile:{user_address}", user_profile[user_address])
 
     async def _handle_user_event(self, task):
         user_address = task["address"]
@@ -165,12 +165,15 @@ class MonitorUserEvent:
                                     continue
                                 prior, address = process_result
 
-                                self._pending_users.add(address)
+                                if address in self._pending_users:
+                                    continue
+
+                                self._pending_users.add(address.lower())
 
                                 try:
                                     await self._task_queue.put((prior, self._prior_counter, {
                                         "type": 'user_event',
-                                        "address": address,
+                                        "address": address.lower(),
                                         "ts": time.time()
                                     }))
                                     self._prior_counter += 1

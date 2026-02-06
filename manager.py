@@ -96,7 +96,7 @@ class DataManager:
             token_dict = {
                 "symbol": u_sym.lower(),
                 "v_symbol": info['v_sym'],
-                "underlying_address": (config.WBNB_VTOKEN_UNDER_ADDRESS if info['is_native'] else info["u_addr"].lower()),
+                "underlying_address": (config.WBNB_UNDER_ADDRESS if info['is_native'] else info["u_addr"].lower()),
                 "address": v_addr.lower(),
                 "underlying_decimal": u_dec,
                 "cf": info['cf'],  # 新增：抵押因子 (如 0.8)
@@ -120,8 +120,8 @@ class DataManager:
                         await self._db.update_pair(f"pair:{u_addr}", v_addr, pair_address)
 
     async def update_exchange_rate(self):
-        bnb_er = self._client.get_exchange_rate(config.BNB_VTOKEN_ADDRESS)
-        await self._db.update_exchange_rate(f'rate:{config.BNB_VTOKEN_ADDRESS}', bnb_er)
+        bnb_er = self._client.get_exchange_rate(config.BNB_ADDRESS)
+        await self._db.update_exchange_rate(f'rate:{config.BNB_ADDRESS}', bnb_er)
 
     async def update_oracle_sources(self):
         abi = [

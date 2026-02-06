@@ -41,12 +41,13 @@ class Analyzer:
         user_profile = await self._db.get_user_profile(f"user_profile:{user_address}")
         if not user_profile:
             user_profile = await self.get_user_snapshot([user_address])
-            if not user_profile:
+            if not user_profile or not user_profile[user_address]:
                 return {
                     "user_address": '',
                     "health_factor": 0,
                     "is_liquidatable": False,
                 }
+            user_profile = user_profile[user_address]
             await self._db.update_user_profile(f"user_profile:{user_address}", user_profile)
 
         hf = self.calculate_hf(user_profile, prices)

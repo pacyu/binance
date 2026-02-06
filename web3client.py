@@ -147,6 +147,10 @@ class VenusClient:
         router_contract = await self.get_async_contract(config.ROUTER_ADDRESS, abi.router_abi)
         return await router_contract.functions.getAmountsIn(amount, path).call()
 
+    async def get_amounts_out(self, amount: int, path: list):
+        router_contract = await self.get_async_contract(config.ROUTER_ADDRESS, abi.router_abi)
+        return await router_contract.functions.getAmountsOut(amount, path).call()
+
     async def get_assets_in(self, user_address: str) -> List[str]:
         """
         获取用户的所有资产地址
@@ -230,7 +234,7 @@ class VenusClient:
         return {
             "symbol": symbol.lower(),
             "v_symbol": v_symbol,
-            "underlying_address": (config.WBNB_VTOKEN_UNDER_ADDRESS if is_native else underlying_addr.lower()),
+            "underlying_address": (config.WBNB_UNDER_ADDRESS if is_native else underlying_addr.lower()),
             "address": v_addr.lower(),
             "underlying_decimal": underlying_decimal,
             "cf": cf,
@@ -350,7 +354,7 @@ class VenusClient:
                                     vdebt_address: str,
                                     vcollateral_address: str,
                                     path: List[str],
-                                    pay_redeem_amount: int,
+                                    pay_collateral_amount: int,
                                     min_profit: int,
                                     debt_underlying_address: str,
                                     collateral_underlying_address: str) -> SignedTx:
@@ -363,7 +367,7 @@ class VenusClient:
         :param vdebt_address: 被清算人欠款的 vToken 合约地址 (如 vUSDT)
         :param vcollateral_address: 你想拿走的抵押品 vToken 合约地址 (如 vBNB)
         :param path: 最优路径
-        :param pay_redeem_amount: 最小支付赎回数量 (单位为 Wei)
+        :param pay_collateral_amount: 最小支付赎回数量 (单位为 Wei)
         :param min_profit: 要求的最低利润 (Wei)
         :param debt_underlying_address: 负债代币底层地址
         :param collateral_underlying_address: 抵押代币底层地址
@@ -381,7 +385,7 @@ class VenusClient:
             self.to_checksum_address(vdebt_address),
             self.to_checksum_address(vcollateral_address),
             path,
-            pay_redeem_amount,
+            pay_collateral_amount,
             min_profit,
             self.to_checksum_address(debt_underlying_address),
             self.to_checksum_address(collateral_underlying_address),
@@ -408,7 +412,7 @@ class VenusClient:
                                 vdebt_address: str,
                                 vcollateral_address: str,
                                 path: List[str],
-                                pay_redeem_amount: int,
+                                pay_collateral_amount: int,
                                 min_profit: int,
                                 debt_underlying_address: str,
                                 collateral_underlying_address: str) -> bool:
@@ -421,7 +425,7 @@ class VenusClient:
         :param vdebt_address: 被清算人欠款的 vToken 合约地址 (如 vUSDT)
         :param vcollateral_address: 你想拿走的抵押品 vToken 合约地址 (如 vBNB)
         :param path: 兑换路径
-        :param pay_redeem_amount: 最小支付数量 (单位为 Wei)
+        :param pay_collateral_amount: 最小支付数量 (单位为 Wei)
         :param min_profit: 要求的最低利润 (Wei)
         :param debt_underlying_address: 负债代币底层地址
         :param collateral_underlying_address: 抵押代币底层地址
@@ -438,7 +442,7 @@ class VenusClient:
             self.to_checksum_address(vdebt_address),
             self.to_checksum_address(vcollateral_address),
             path,
-            pay_redeem_amount,
+            pay_collateral_amount,
             min_profit,
             self.to_checksum_address(debt_underlying_address),
             self.to_checksum_address(collateral_underlying_address),
