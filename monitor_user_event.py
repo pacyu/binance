@@ -53,11 +53,11 @@ class MonitorUserEvent:
 
     async def _process_and_analyze(self, user_address):
         user_profile = await self.analyzer.get_user_snapshot([user_address])
+        await self._db.save_user_wallet("wallet_address", user_address)
         await self._db.update_user_profile(f"user_profile:{user_address}", user_profile[user_address])
 
     async def _handle_user_event(self, task):
         user_address = task["address"]
-        await self._db.save_user_wallet("wallet_address", user_address)
         await self._process_and_analyze(user_address)
         if user_address in self._pending_users:
             self._pending_users.remove(user_address)
