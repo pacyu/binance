@@ -16,7 +16,7 @@ class Liquidator:
         self._db = db
         self.Log = logger
         self.analyzer = analyzer
-        self.incentive_rate = 1.1
+        self.incentive_rate = 1100000000000000000
         self._execution_lock = None
         self._vtoken_cache = None
         self._cooldown_cache = {}
@@ -90,7 +90,10 @@ class Liquidator:
     def calc_received_collateral(repay_amount_wei, best_debt, best_collateral, prices, incentive_rate):
         price_debt = prices[best_debt['v_addr']]
         price_collateral = prices[best_collateral['v_addr']]
-        received_collateral_wei = (repay_amount_wei * price_debt * incentive_rate) // price_collateral
+
+        numerator = repay_amount_wei * price_debt * incentive_rate
+        denominator = price_collateral * 10**18
+        received_collateral_wei = numerator // denominator
         return int(received_collateral_wei)
 
     async def calc_transform_collateral_to_usdt_best_path(self,
@@ -205,15 +208,15 @@ class Liquidator:
             if not token:
                 return {}, {}
 
-            current_price = prices[v_addr] / token['oracle_precision']
-            value_usd = abs(amount) * current_price
+            current_price = prices[v_addr]
+            value = abs(amount) * current_price
 
             if amount < 0:  # 债务
                 debts.append({
                     "v_addr": v_addr,
                     "underlying_address": token['underlying_address'],
                     "symbol": token['symbol'],
-                    "value": value_usd,
+                    "value": value,
                     "amount": abs(amount),
                     "underlying_decimal": token['underlying_decimal'],
                 })
@@ -222,7 +225,7 @@ class Liquidator:
                     "v_addr": v_addr,
                     "underlying_address": token['underlying_address'],
                     "symbol": token['symbol'],
-                    "value": value_usd,
+                    "value": value,
                     "amount": amount,
                     "cf": token['cf'],
                     "underlying_decimal": token['underlying_decimal'],
@@ -239,30 +242,28 @@ class Liquidator:
     @staticmethod
     def get_optimal_repay(best_debt, best_collateral, incentive_rate):
         # 1. 协议限制：只能还 50%
-        debt_amount_limited = best_debt['amount'] * config.CLOSE_FACTOR
+        debt_amount_limited = int(best_debt['amount'] * config.CLOSE_FACTOR)
 
         # 2. 抵押品限制：不能超过抵押品能赔付的上限 (假设奖励 10%)
-        collateral_amount_limited = best_collateral['amount'] * incentive_rate
+        collateral_amount_limited = int(best_collateral['amount'] * (incentive_rate // 10**18))
 
         repay_amount = min(debt_amount_limited, collateral_amount_limited)
 
         return repay_amount
 
-    async def is_liquidation(self, user_addr: str, user_profile: dict, prices: dict, incentive_rate=1.1) -> dict:
+    async def is_liquidation(self, user_addr: str, user_profile: dict, prices: dict, incentive_rate) -> dict:
         best_debt, best_collateral = self.find_best_liquidation_asset(user_profile, prices)
         if not best_debt or not best_collateral:
             return {"is_profitable": False, "best_debt": {}, "best_collateral": {}, "repay_amount": 0}
 
-        repay_amount = self.get_optimal_repay(best_debt, best_collateral, incentive_rate)
-        repay_usd = repay_amount * prices[best_debt['v_addr']] / (10 ** best_debt['underlying_decimal'])
+        repay_amount_wei = self.get_optimal_repay(best_debt, best_collateral, incentive_rate)
+        repay_usd = repay_amount_wei * prices[best_debt['v_addr']] / (10 ** (18 + best_debt['underlying_decimal']))
 
         min_profit_wei = usd_to_wei(config.MIN_PROFIT_TOLERANCE,
                                     prices[config.USDT_ADDRESS],
                                     18)
 
-        repay_amount_wei = usd_to_wei(repay_amount,
-                                      prices[best_debt['v_addr']],
-                                      best_debt['underlying_decimal'])
+
 
         if best_debt['underlying_address'] != config.WBNB_UNDER_ADDRESS:
             pair_address = await self._db.get_pair(f"pair:{best_debt['underlying_address']}",

@@ -15,25 +15,25 @@ class Analyzer:
         return self._vtoken_cache
 
     def calculate_hf(self, user_profile: dict, prices: dict) -> float:
-        total_collateral_usd = 0
-        total_debt_usd = 0
+        total_collateral = 0
+        total_debt = 0
 
         for v_addr, amount in user_profile.items():
             price = prices.get(v_addr)
             if not price:
                 break
 
-            amount = float(amount)
+            amount = int(amount)
             token = self._vtoken_cache[v_addr]
-            current_price = price / token['oracle_precision']
-            usd_price = amount * current_price
+            current_price = price
+            value = amount * current_price
             if amount > 0:
-                total_collateral_usd += usd_price * token['cf']
+                total_collateral += value * token['cf']
             else:
-                total_debt_usd += abs(usd_price)
+                total_debt += abs(value)
 
-        if total_debt_usd > 0:
-            hf = total_collateral_usd / total_debt_usd
+        if total_debt > 0:
+            hf = total_collateral / total_debt
             return hf
         return float('inf')
 
@@ -53,6 +53,7 @@ class Analyzer:
         hf = self.calculate_hf(user_profile, prices)
         if hf <= 1.3:
             await self._db.update_user_hf_in_order("high_risk_queue", {user_address: hf})
+
         report = {
             "user_address": user_address,
             "health_factor": hf,
@@ -86,6 +87,7 @@ class Analyzer:
     async def get_user_snapshot(self, user_address_list: list) -> dict:
         results = await self._client.get_account_snapshot(user_address_list)
         user_profile = {}
+        wad = 10 ** 18
         for addr, snapshot in results.items():
             user_addr, v_addr = addr.split('|')
             err, vtoken_bal, borrow_bal, exchange_rate = snapshot
@@ -93,20 +95,19 @@ class Analyzer:
             if err != 0:
                 continue
 
-            # 计算底层资产抵押数量 = vToken余额 * 兑换率 / 1e18
-            collateral_underlying = (vtoken_bal * exchange_rate) / 1e18
+            # 计算底层资产抵押数量 = vToken余额 * 兑换率
+            collateral_underlying = (vtoken_bal * exchange_rate) // wad
 
             # 借款余额已经是底层资产单位了
             debt_underlying = borrow_bal
 
             # 计算净头寸 (带符号)
             # 这里假设只要有存款就视为抵押，实际上需要判断是否入库 (isListed)，但清算中通常直接取净值
-            amount = (collateral_underlying - debt_underlying) / 1e18
+            amount = collateral_underlying - debt_underlying
 
             if abs(amount) > 1e-9:  # 过滤极小值
                 if user_addr not in user_profile:
                     user_profile[user_addr] = {}
-                else:
-                    user_profile[user_addr][v_addr] = amount
-            await self._db.update_user_asset_map_list(f'asset:users:{v_addr}', user_addr)
+                user_profile[user_addr][v_addr] = amount
+                await self._db.update_user_asset_map_list(f'asset:users:{v_addr}', user_addr)
         return user_profile
