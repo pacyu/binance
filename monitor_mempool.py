@@ -77,7 +77,7 @@ class MonitorMemPool:
         try:
             tx = await self._client.get_transaction(tx_hash)
             oracle_address = tx['to']
-            if oracle_address in config.ORACLE_WATCHLIST:
+            if oracle_address in config.ORACLE_LIST:
                 self.Log.debug(">>>> 地址:", oracle_address)
                 self.Log.debug(">>>> input:", tx['input'].hex())
             #     for v_addr in result:
