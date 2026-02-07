@@ -18,7 +18,7 @@ class MonitorUsers:
         bloxroute_auth_header = os.getenv('BLOXROUTE_AUTH_HEADER')
 
         self._db = RedisClient()
-        self._client = VenusClient(config.ANKR_RPC_URL2,
+        self._client = VenusClient(config.CHAINSTACK_RPC_URL,
                                    config.VENUS_CORE_COMPTROLLER_ADDR,
                                    private_key,
                                    bloxroute_api_key,

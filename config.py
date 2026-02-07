@@ -6,6 +6,8 @@ BINANCE_PRICE_WSS_URI = "wss://stream.binance.com:9443/stream?streams="
 
 BLOXROUTE_API = "https://bsc.api.blxr.com"
 
+CHAINSTACK_RPC_URL = "https://bsc-mainnet.core.chainstack.com/668cbde831e25cc330b51f57b8a54923"
+CHAINSTACK_WSS_URI = "wss://bsc-mainnet.core.chainstack.com/668cbde831e25cc330b51f57b8a54923"
 ANKR_RPC_URL = "https://rpc.ankr.com/bsc/e1742d0ef375c7aaea14e37dc62551a3ab497cacde500e73382b5e3d9bb801b3"
 ANKR_RPC_URL2 = "https://rpc.ankr.com/bsc/7dd405f2eb3ccaf5b967ec8a17d4ad63788c3df585850106619fbb187323bf55"
 NODEREAL_RPC_URL = "https://bsc-mainnet.nodereal.io/v1/0d1c1bcb6f8440eb8f159ff5837c819c"
