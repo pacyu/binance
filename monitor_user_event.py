@@ -79,7 +79,7 @@ class MonitorUserEvent:
             account_borrows = decoded['args']['accountBorrows'] / 1e18
             total_borrows = decoded['args']['totalBorrows'] / 1e18
             self.Log.info(f"🔥 检测到用户借款事件! 合约地址: {vtoken_addr} | 借款人: {user_addr}"
-                          f" | 借款金额: {borrow_amount} | 借款人总债务: {account_borrows}"
+                          f" | 借款数量: {borrow_amount} | 借款人总债务: {account_borrows}"
                           f" | 市场总债务: {total_borrows} | transactionHash: {log['transactionHash']}")
             return 1, user_addr
 
@@ -107,7 +107,7 @@ class MonitorUserEvent:
             account_borrows_new = decoded['args']['accountBorrowsNew'] / 1e18
             total_borrows_new = decoded['args']['totalBorrowsNew'] / 1e18
             self.Log.info(f"🔥 检测到用户还款事件! 合约地址: {vtoken_addr} | 还款人: {payer_addr}"
-                           f" | 借款人: {user_addr} | 还款金额: {repay_amount}"
+                           f" | 借款人: {user_addr} | 还款数量: {repay_amount}"
                            f" | 借款人新债务: {account_borrows_new}"
                            f" | 市场总债务新值: {total_borrows_new}"
                            f" | transactionHash: {log['transactionHash']}")
@@ -124,7 +124,7 @@ class MonitorUserEvent:
             vtoken_collateral_addr = decoded['args']['vTokenCollateral']
             seize_tokens = decoded['args']['seizeTokens'] / 1e18
             self.Log.info(f"🔥 检测到用户清算事件! 合约地址: {vtoken_addr} | 清算者: {liquidator_addr}"
-                          f" | 被清算的借款人: {user_addr} | 偿还的债务金额: {repay_amount}"
+                          f" | 被清算的借款人: {user_addr} | 偿还的债务数量: {repay_amount}"
                           f" | 抵押品vToken地址: {vtoken_collateral_addr}"
                           f" | 清算者获得的抵押品vToken数量: {seize_tokens}"
                           f" | transactionHash: {log['transactionHash']}")
@@ -203,8 +203,8 @@ class MonitorUserEvent:
                 if task["type"] == "user_event":
                     await self._handle_user_event(task)
 
-            # except Exception as e:
-            #     self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}, 任务: {task}")
+            except Exception as e:
+                self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}, 任务: {task}")
 
             finally:
                 self._task_queue.task_done()

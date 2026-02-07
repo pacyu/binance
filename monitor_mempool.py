@@ -77,9 +77,9 @@ class MonitorMemPool:
         try:
             tx = await self._client.get_transaction(tx_hash)
             oracle_address = tx['to']
-            if oracle_address in config.ORACLE_LIST:
-                self.Log.debug(">>>> 地址:", oracle_address)
-                self.Log.debug(">>>> input:", tx['input'].hex())
+
+            self.Log.debug(f">>>> 地址: {oracle_address}")
+            self.Log.debug(f">>>> input: {tx['input'].hex()}")
             #     for v_addr in result:
             #         await self._check_opportunity(v_addr, self._pre_onchain_price, tx_hash)
         except TransactionNotFound:
