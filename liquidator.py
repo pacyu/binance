@@ -36,7 +36,7 @@ class Liquidator:
             liquidation_report = await self.is_liquidation(user_address, user_profile, prices, self.incentive_rate)
             if liquidation_report['is_profitable']:
                 status = await self.execute_liquidation(user_address, liquidation_report, oracle_tx_hash)
-                self.Log.info(f"用户: {user_address} | 清算结果状态: {status}")
+                self.Log.info(f"用户: {user_address} | 健康度: {health_factor} | 账户流动性:{liquidity} | 账户缺口: {shortfall} | 清算结果状态: {status}")
             else:
                 self.Log.info(f"用户: {user_address} 不值得清算! | 用户资产: {user_profile} | 健康度: {health_factor}")
         else:
