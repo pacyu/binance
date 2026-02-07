@@ -52,9 +52,10 @@ class MonitorRiskyUser:
         user_address_list = await self._db.get_user_hf_by_score('high_risk_queue', 0, float('inf'))
         user_address_list = [user_address for user_address in user_address_list
                              if not await self._db.should_skip(f"liquidator:skip:{user_address}")]
+        self.Log.info(f"本次扫描用户数量: {len(user_address_list)} 个")
 
         if not user_address_list:
-            self.Log.info(f"用户列表为空: {user_address_list}")
+            self.Log.error(f"用户列表为空: {user_address_list}")
             return
 
         prices = await self._client.get_oracle_price(list(self._vtoken_cache.keys()))
@@ -72,7 +73,7 @@ class MonitorRiskyUser:
 
         self.Log.info(f"轮询任务开始，该任务每分钟执行一次...")
         await self.risky_user_check()
-        self.Log.info(f"轮询任务完成!")
+        self.Log.info(f"本次轮询任务完成!")
 
     def __call__(self, *args, **kwargs):
         asyncio.run(self.run())

@@ -50,8 +50,10 @@ class MonitorUsers:
 
     async def full_scan(self):
         user_address_list = list(await self._db.read_by_name('wallet_address'))
+        self.Log.info(f"本次扫描用户数量: {len(user_address_list)} 个")
 
         if not user_address_list:
+            self.Log.error(f"用户列表为空: {user_address_list}")
             return
 
         prices = await self._client.get_oracle_price(list(self._vtoken_cache.keys()))
@@ -70,7 +72,7 @@ class MonitorUsers:
 
         self.Log.info(f"全量扫描任务开始，该任务每小时执行一次...")
         await self.full_scan()
-        self.Log.info(f"全量扫描完成!")
+        self.Log.info(f"本次全量扫描完成!")
 
     def __call__(self):
         asyncio.run(self.run())
