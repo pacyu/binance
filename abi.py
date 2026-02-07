@@ -329,6 +329,19 @@ contract_abi = [
   },
   {
     "type": "function",
+    "name": "VBNB",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "WBNB",
     "inputs": [],
     "outputs": [
@@ -443,6 +456,13 @@ contract_abi = [
         "internalType": "address"
       }
     ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "rescueBNB",
+    "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
   }
