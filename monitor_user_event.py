@@ -53,8 +53,8 @@ class MonitorUserEvent:
 
     async def _process_and_analyze(self, user_address):
         await self._db.save_user_wallet("wallet_address", user_address)
-        if await self._db.exist_user_profile(f"user_profile:{user_address}"):
-            return
+        # if await self._db.exist_user_profile(f"user_profile:{user_address}"):
+        #     return
         user_profile = await self.analyzer.get_user_snapshot([user_address])
         if user_profile and user_profile[user_address]:
             await self._db.update_user_profile(f"user_profile:{user_address}", user_profile[user_address])
