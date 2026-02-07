@@ -75,9 +75,9 @@ class MonitorUserEvent:
             user_addr = decoded['args']['borrower']
             if user_addr in config.BLACKLIST:
                 return None
-            borrow_amount = decoded['args']['borrowAmount'] / 1e18
-            account_borrows = decoded['args']['accountBorrows'] / 1e18
-            total_borrows = decoded['args']['totalBorrows'] / 1e18
+            borrow_amount = decoded['args']['borrowAmount']
+            account_borrows = decoded['args']['accountBorrows']
+            total_borrows = decoded['args']['totalBorrows']
             self.Log.info(f"🔥 检测到用户借款事件! 合约地址: {vtoken_addr} | 借款人: {user_addr}"
                           f" | 借款数量: {borrow_amount} | 借款人总债务: {account_borrows}"
                           f" | 市场总债务: {total_borrows} | transactionHash: {log['transactionHash']}")
@@ -89,8 +89,8 @@ class MonitorUserEvent:
             user_addr = decoded['args']['redeemer']
             if user_addr in config.BLACKLIST:
                 return None
-            redeem_amount = decoded['args']['redeemAmount'] / 1e18
-            redeem_tokens = decoded['args']['redeemTokens'] / 1e18
+            redeem_amount = decoded['args']['redeemAmount']
+            redeem_tokens = decoded['args']['redeemTokens']
             self.Log.info(f"🔥 检测到用户赎回事件! 合约地址: {vtoken_addr} | 赎回者: {user_addr}"
                            f" | 赎回资产数量: {redeem_amount} | 销毁vToken数量: {redeem_tokens}"
                            f" | transactionHash: {log['transactionHash']}")
@@ -103,9 +103,9 @@ class MonitorUserEvent:
             user_addr = decoded['args']['borrower']
             if payer_addr in config.BLACKLIST:
                 return None
-            repay_amount = decoded['args']['repayAmount'] / 1e18
-            account_borrows_new = decoded['args']['accountBorrowsNew'] / 1e18
-            total_borrows_new = decoded['args']['totalBorrowsNew'] / 1e18
+            repay_amount = decoded['args']['repayAmount']
+            account_borrows_new = decoded['args']['accountBorrowsNew']
+            total_borrows_new = decoded['args']['totalBorrowsNew']
             self.Log.info(f"🔥 检测到用户还款事件! 合约地址: {vtoken_addr} | 还款人: {payer_addr}"
                            f" | 借款人: {user_addr} | 还款数量: {repay_amount}"
                            f" | 借款人新债务: {account_borrows_new}"
@@ -120,9 +120,9 @@ class MonitorUserEvent:
             user_addr = decoded['args']['borrower']
             if liquidator_addr in config.BLACKLIST:
                 return None
-            repay_amount = decoded['args']['repayAmount'] / 1e18
+            repay_amount = decoded['args']['repayAmount']
             vtoken_collateral_addr = decoded['args']['vTokenCollateral']
-            seize_tokens = decoded['args']['seizeTokens'] / 1e18
+            seize_tokens = decoded['args']['seizeTokens']
             self.Log.info(f"🔥 检测到用户清算事件! 合约地址: {vtoken_addr} | 清算者: {liquidator_addr}"
                           f" | 被清算的借款人: {user_addr} | 偿还的债务数量: {repay_amount}"
                           f" | 抵押品vToken地址: {vtoken_collateral_addr}"
