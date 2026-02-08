@@ -300,7 +300,7 @@ class Liquidator:
             rest_collateral_amount_wei)
 
         # 6. 毛利润
-        gross_profit_usd = ((gross_profit_amount * prices[config.USDT_ADDRESS]) / 10 ** 36)
+        gross_profit_usd = (gross_profit_amount * prices[config.USDT_ADDRESS]) / 10 ** 36
 
         # 7. 净利润
         net_profit = gross_profit_usd - gas_cost_usd
@@ -312,6 +312,7 @@ class Liquidator:
         # else:
         self.Log.info(f"--- ⚖️ 用户 {user_addr} 清算决策报告 ---\n"
                       f"🔹 待清算金额:  ${repay_usd} USD (代偿数量: {repay_amount_wei} | 负债数量: {best_debt['amount']} | 价格: {prices[best_debt['v_addr']]})\n"
+                      f"🙌 换为 USDT 能得到的数量: {gross_profit_amount}\n"
                       f"💰 理论毛利:    ${gross_profit_usd} USD\n"
                       f"⛽ Gas 成本:   ${gas_cost_usd} USD (约 {gas_cost_bnb:.8f} BNB)\n"
                       f"💴 预计收益:    ${net_profit} USD\n"
