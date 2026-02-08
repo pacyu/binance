@@ -38,7 +38,7 @@ class Liquidator:
                 status = await self.execute_liquidation(user_address, liquidation_report, oracle_tx_hash)
                 self.Log.info(f"用户: {user_address} | 健康度: {health_factor} | 账户流动性:{liquidity} | 账户缺口: {shortfall} | 清算结果状态: {status}")
             else:
-                self.Log.info(f"用户: {user_address} 不值得清算! | 用户资产: {user_profile} | 健康度: {health_factor}")
+                self.Log.info(f"用户: {user_address} 不值得清算! | 健康度: {health_factor} | 用户资产: {user_profile}")
         else:
             self.Log.info(f"用户无法被清算! 健康度: {health_factor} | 账户流动性:{liquidity} | 账户缺口: {shortfall}")
 
@@ -263,8 +263,6 @@ class Liquidator:
                                     prices[config.USDT_ADDRESS],
                                     18)
 
-
-
         if best_debt['underlying_address'] != config.WBNB_UNDER_ADDRESS:
             pair_address = await self._db.get_pair(f"pair:{best_debt['underlying_address']}",
                                                    config.WBNB_UNDER_ADDRESS)
@@ -311,13 +309,13 @@ class Liquidator:
             await self._db.mark_as_non_liquidable(f"liquidator:skip:{user_addr}",
                                                   config.COOLDOWN_TTL_HOUR,
                                                   f"low_profit: {net_profit} USD")
-        else:
-            self.Log.info(f"--- ⚖️ 用户 {user_addr} 清算决策报告 ---\n"
-                          f"🔹 待清算金额:  ${repay_usd} USD\n"
-                          f"💰 理论毛利:    ${gross_profit_usd} USD\n"
-                          f"⛽ Gas 成本:   ${gas_cost_usd} USD (约 {gas_cost_bnb:.8f} BNB)\n"
-                          f"💴 预计收益:    ${net_profit} USD\n"
-                          f"----------------------")
+        # else:
+        self.Log.info(f"--- ⚖️ 用户 {user_addr} 清算决策报告 ---\n"
+                      f"🔹 待清算金额:  ${repay_usd} USD (代偿数量: {repay_amount_wei} | 负债数量: {best_debt['amount']} | 价格: {prices[best_debt['v_addr']]})\n"
+                      f"💰 理论毛利:    ${gross_profit_usd} USD\n"
+                      f"⛽ Gas 成本:   ${gas_cost_usd} USD (约 {gas_cost_bnb:.8f} BNB)\n"
+                      f"💴 预计收益:    ${net_profit} USD\n"
+                      f"----------------------")
 
         liquidation_report = {
             "is_profitable": net_profit >= config.MIN_PROFIT_TOLERANCE,  # 利润大于 1 刀

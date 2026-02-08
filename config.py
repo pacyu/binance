@@ -6,6 +6,8 @@ BINANCE_PRICE_WSS_URI = "wss://stream.binance.com:9443/stream?streams="
 
 BLOXROUTE_API = "https://bsc.api.blxr.com"
 
+QUICKNODE_RPC_URL = "https://boldest-misty-telescope.bsc.quiknode.pro/39e5c01d5a86de67d7275d7573e5801a22663338/"
+QUICKNODE_WSS_URI = "wss://boldest-misty-telescope.bsc.quiknode.pro/39e5c01d5a86de67d7275d7573e5801a22663338/"
 CHAINSTACK_RPC_URL = "https://bsc-mainnet.core.chainstack.com/668cbde831e25cc330b51f57b8a54923"
 CHAINSTACK_WSS_URI = "wss://bsc-mainnet.core.chainstack.com/668cbde831e25cc330b51f57b8a54923"
 ANKR_RPC_URL = "https://rpc.ankr.com/bsc/e1742d0ef375c7aaea14e37dc62551a3ab497cacde500e73382b5e3d9bb801b3"
@@ -47,7 +49,7 @@ PRICE_VOLATILITY_THRESHOLD = 0.001
 
 CLOSE_FACTOR = 0.48
 MAX_SLIPPAGE_TOLERANCE = 0.02
-MIN_PROFIT_TOLERANCE = 0
+MIN_PROFIT_TOLERANCE = 0.005
 
 COOLDOWN_TTL_SECOND = 1
 COOLDOWN_TTL_MINUTE = 60
