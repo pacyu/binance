@@ -38,7 +38,7 @@ class Liquidator:
                 status = await self.execute_liquidation(user_address, liquidation_report, oracle_tx_hash)
                 self.Log.info(f"用户: {user_address} | 健康度: {health_factor} | 账户流动性:{liquidity} | 账户缺口: {shortfall} | 清算结果状态: {status}")
             else:
-                self.Log.info(f"用户: {user_address} 不值得清算! | 健康度: {health_factor} | 用户资产: {user_profile}")
+                self.Log.info(f"用户: {user_address} 不值得清算! | 健康度: {health_factor}")
         else:
             self.Log.info(f"用户无法被清算! 健康度: {health_factor} | 账户流动性:{liquidity} | 账户缺口: {shortfall}")
 
@@ -305,18 +305,25 @@ class Liquidator:
         # 7. 净利润
         net_profit = gross_profit_usd - gas_cost_usd
 
+        self.Log.info(f"用户 {user_addr} | 负债代币: {best_debt['symbol']} | 抵押代币: {best_collateral['symbol']}")
+        self.Log.info(f"用户资产: {user_profile}")
+        self.Log.info(f"代偿数量: {repay_amount_wei} | 负债人负债代币总数量: {best_debt['amount']} | 价格: {prices[best_debt['v_addr']]}")
+        self.Log.info(f"能得到的总抵押品数量: {received_collateral_amount_wei}")
+        self.Log.info(f"支付抵押品数量: {pay_collateral_amount_wei}")
+        self.Log.info(f"剩余抵押品数量: {rest_collateral_amount_wei}")
+        self.Log.info(f"将剩余抵押品换为 USDT 能得到的数量: {gross_profit_amount}")
+
         if net_profit < config.MIN_PROFIT_TOLERANCE:
             await self._db.mark_as_non_liquidable(f"liquidator:skip:{user_addr}",
                                                   config.COOLDOWN_TTL_HOUR,
                                                   f"low_profit: {net_profit} USD")
-        # else:
-        self.Log.info(f"--- ⚖️ 用户 {user_addr} 清算决策报告 ---\n"
-                      f"🔹 待清算金额:  ${repay_usd} USD (代偿数量: {repay_amount_wei} | 负债数量: {best_debt['amount']} | 价格: {prices[best_debt['v_addr']]})\n"
-                      f"🙌 换为 USDT 能得到的数量: {gross_profit_amount}\n"
-                      f"💰 理论毛利:    ${gross_profit_usd} USD\n"
-                      f"⛽ Gas 成本:   ${gas_cost_usd} USD (约 {gas_cost_bnb:.8f} BNB)\n"
-                      f"💴 预计收益:    ${net_profit} USD\n"
-                      f"----------------------")
+        else:
+            self.Log.info(f"--- ⚖️ 用户 {user_addr} 清算决策报告 ---\n"
+                          f"🔹 待清算金额:  ${repay_usd} USD\n"
+                          f"💰 理论毛利:    ${gross_profit_usd} USD\n"
+                          f"⛽ Gas 成本:   ${gas_cost_usd} USD (约 {gas_cost_bnb:.8f} BNB)\n"
+                          f"💴 预计收益:    ${net_profit} USD\n"
+                          f"----------------------")
 
         liquidation_report = {
             "is_profitable": net_profit >= config.MIN_PROFIT_TOLERANCE,  # 利润大于 1 刀
@@ -341,8 +348,6 @@ class Liquidator:
         pay_collateral_amount_wei = liquidation_report['pay_collateral_amount']
         min_profit_wei = liquidation_report['min_profit']
         net_profit = liquidation_report['net_profit']
-
-        self.Log.info(f"用户 {user_address}, 负债: {debt['symbol']}, 抵押品: {collateral['symbol']}")
 
         try:
             self._client.simulate_liquidation_tx(
