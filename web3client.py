@@ -172,9 +172,9 @@ class VenusClient:
         mantissa = await contract.functions.liquidationIncentiveMantissa().call()
         return mantissa / 10 ** 18
 
-    async def get_exchange_rate(self, vtoken_address: str) -> float:
-        contract = await self.get_async_contract(vtoken_address, abi.exchange_rate_abi)
-        return await contract.functions.exchangeRateStored().call()
+    def get_exchange_rate(self, vtoken_address: str) -> float:
+        contract = self.get_contract(vtoken_address, abi.exchange_rate_abi)
+        return contract.functions.exchangeRateStored().call()
 
     async def get_cash(self, v_address: str) -> float:
         v_contract = await self.get_async_contract(v_address, abi.erc20_abi)
