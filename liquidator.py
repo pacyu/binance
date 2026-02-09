@@ -42,9 +42,6 @@ class Liquidator:
         else:
             self.Log.info(f"用户无法被清算! 健康度: {health_factor} | 账户流动性:{liquidity} | 账户缺口: {shortfall}")
 
-        await self._db.update_user_profile(f"user_profile:{user_address}", user_profile)
-        await self._db.update_user_hf_in_order("high_risk_queue", {user_address: health_factor})
-
     async def handle_multi_liquidation(self, user_address_list, prices):
         risky_reports = await self.analyzer.analyze_users(user_address_list, prices)
         assets = await self._client.get_user_liquidity(user_address_list)
