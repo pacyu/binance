@@ -4,6 +4,7 @@ import time
 import config
 import asyncio
 import websockets
+from eth_abi import abi
 from dotenv import load_dotenv
 from logger import Logger
 from redis_client import RedisClient
@@ -22,7 +23,7 @@ class MonitorMemPool:
         bloxroute_auth_header = os.getenv('BLOXROUTE_AUTH_HEADER')
 
         self.Log = Logger('mempool.log')()
-        self._client = VenusClient(config.ANKR_RPC_URL2,
+        self._client = VenusClient(config.QUICKNODE_RPC_URL,
                                    config.VENUS_CORE_COMPTROLLER_ADDR,
                                    private_key,
                                    bloxroute_api_key,
@@ -76,10 +77,30 @@ class MonitorMemPool:
     async def _process_transaction(self, tx_hash):
         try:
             tx = await self._client.get_transaction(tx_hash)
-            oracle_address = tx['to']
+            data = tx['input'].hex()
+            if data[:8] == '6fadcf72':
+                raw_data = bytes.fromhex(data[8:])
+                outer_decoded = abi.decode(['address', 'bytes'], raw_data)
+                oracle_address = outer_decoded[0]
+                inner_transmit_data = outer_decoded[1]
+                if inner_transmit_data[:4].hex() == "b1dc65a4":
+                    inner_payload = inner_transmit_data[4:]
+                    decoded = abi.decode(
+                        ['bytes32[3]', 'bytes', 'bytes32[]', 'bytes32[]', 'bytes32'],
+                        inner_payload
+                    )
+                    report = decoded[1]
+                    print(report.hex())
+                    print(oracle_address)
+            elif data[:8] == 'b1dc65a4':
+                inner_payload = data[8:]
+                decoded = abi.decode(
+                    ['bytes32[3]', 'bytes', 'bytes32[]', 'bytes32[]', 'bytes32'],
+                    bytes.fromhex(inner_payload)
+                )
+                report = decoded[1]
+                print(report.hex())
 
-            self.Log.debug(f">>>> 地址: {oracle_address}")
-            self.Log.debug(f">>>> input: {tx['input'].hex()}")
             #     for v_addr in result:
             #         await self._check_opportunity(v_addr, self._pre_onchain_price, tx_hash)
         except TransactionNotFound:

@@ -2,6 +2,7 @@ import os
 import json
 import config
 import asyncio
+from cmath import inf
 from dotenv import load_dotenv
 from logger import Logger
 from redis_client import RedisClient
@@ -49,7 +50,9 @@ class MonitorRiskyUser:
             self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}")
 
     async def risky_user_check(self):
-        user_address_list = await self._db.get_user_hf_by_score('high_risk_queue', 0, float('inf'))
+        await self._db.remove_user_hf_by_score("high_risk_queue", 0, 0.2)
+        await self._db.remove_user_hf_by_score("high_risk_queue", 5, inf)
+        user_address_list = await self._db.get_user_hf_by_score('high_risk_queue', 0, inf)
         user_address_list = [user_address for user_address in user_address_list
                              if not await self._db.should_skip(f"liquidator:skip:{user_address}")]
         self.Log.info(f"本次扫描用户数量: {len(user_address_list)} 个")
