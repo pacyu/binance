@@ -29,18 +29,18 @@ class Liquidator:
 
     async def _handle_helper(self, user_address: str, user_profile: dict, assets: dict, prices: dict,
                              health_factor: float, oracle_tx_hash: str = None):
-        self.Log.info(f"正在处理用户: {user_address}")
+        self.Log.info(f"正在处理用户: {user_address} | 健康度: {health_factor} ")
         error, liquidity, shortfall = assets[user_address]
 
         if shortfall > 0:
             liquidation_report = await self.is_liquidation(user_address, user_profile, prices, self.incentive_rate)
             if liquidation_report['is_profitable']:
                 status = await self.execute_liquidation(user_address, liquidation_report, oracle_tx_hash)
-                self.Log.info(f"用户: {user_address} | 健康度: {health_factor} | 账户流动性:{liquidity} | 账户缺口: {shortfall} | 清算结果状态: {status}")
+                self.Log.info(f"用户: {user_address}| 账户流动性:{liquidity} | 账户缺口: {shortfall} | 清算结果状态: {status}")
             else:
-                self.Log.info(f"用户: {user_address} 不值得清算! | 健康度: {health_factor}")
+                self.Log.info(f"用户: {user_address} 不值得清算! | 账户流动性:{liquidity} | 账户缺口: {shortfall}")
         else:
-            self.Log.info(f"用户无法被清算! 健康度: {health_factor} | 账户流动性:{liquidity} | 账户缺口: {shortfall}")
+            self.Log.info(f"用户无法被清算! | 账户流动性:{liquidity} | 账户缺口: {shortfall}")
 
     async def handle_multi_liquidation(self, user_address_list, prices):
         risky_reports = await self.analyzer.analyze_users(user_address_list, prices)
