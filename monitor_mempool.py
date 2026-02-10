@@ -12,6 +12,7 @@ from web3client import VenusClient
 from analyzer import Analyzer
 from liquidator import Liquidator
 from web3.exceptions import TransactionNotFound
+from utils import extract_payload, extract_method_id, parse_prices
 from websockets.exceptions import ConnectionClosedError
 
 
@@ -33,12 +34,14 @@ class MonitorMemPool:
         self.engine = Liquidator(self._client, self._db, self.analyzer, self.Log)
 
         self._task_queue = asyncio.Queue(maxsize=1000)
-        self._semaphore = asyncio.Semaphore(30)
+        self._semaphore = asyncio.Semaphore(60)
 
         self._prior_counter = 0
 
+        self._process_func = {'6fadcf72': self._process_forward, 'b1dc65a4': self._process_transmit}
         self._vtoken_cache = {}
         self._pre_onchain_price ={}
+        self._digests_mapping = {}
 
         self._execution_lock = asyncio.Lock()
 
@@ -47,10 +50,28 @@ class MonitorMemPool:
         self.engine.set_execution_lock(self._execution_lock)
 
     async def _load_vtoken_cache_(self):
-        all_vtokens = await self._db.get_markets('asset:v_addr')
-        for item in all_vtokens:
-            token = json.loads(item)
-            self._vtoken_cache[token['address']] = token
+        self._vtoken_cache = await self._db.get_markets()
+
+    async def _load__digests_map_cache_(self):
+        self._digests_mapping = await self._db.get_all_digests()
+
+    async def _init_price_(self):
+        self._pre_onchain_price = await self._client.get_oracle_price(list(self._vtoken_cache.keys()))
+
+    @staticmethod
+    def _process_forward(data: str):
+        data_bytes = bytes.fromhex(data)
+        decoded = abi.decode(['address', 'bytes'], data_bytes)
+        return decoded
+
+    @staticmethod
+    def _process_transmit(data: str):
+        data_bytes = bytes.fromhex(data)
+        decoded = abi.decode(
+            ['bytes32[3]', 'bytes', 'bytes32[]', 'bytes32[]', 'bytes32'],
+            data_bytes
+        )
+        return decoded
 
     async def _handle_oracle_update(self, task):
         tx_hash = task["tx_hash"]
@@ -63,7 +84,7 @@ class MonitorMemPool:
                 await self.engine.handle_liquidation(risky_report, oracle_tx_hash)
 
     async def _check_opportunity(self, vtoken_addr, prices, oracle_tx_hash: str = None):
-        user_address_list = list(await self._db.read_by_name(f'asset:users:{vtoken_addr}'))
+        user_address_list = list(await self._db.get_holder_by_currency(vtoken_addr))
 
         if not user_address_list:
             return
@@ -78,31 +99,30 @@ class MonitorMemPool:
         try:
             tx = await self._client.get_transaction(tx_hash)
             data = tx['input'].hex()
-            if data[:8] == '6fadcf72':
-                raw_data = bytes.fromhex(data[8:])
-                outer_decoded = abi.decode(['address', 'bytes'], raw_data)
-                oracle_address = outer_decoded[0]
-                inner_transmit_data = outer_decoded[1]
-                if inner_transmit_data[:4].hex() == "b1dc65a4":
-                    inner_payload = inner_transmit_data[4:]
-                    decoded = abi.decode(
-                        ['bytes32[3]', 'bytes', 'bytes32[]', 'bytes32[]', 'bytes32'],
-                        inner_payload
-                    )
-                    report = decoded[1]
-                    print(report.hex())
-                    print(oracle_address)
-            elif data[:8] == 'b1dc65a4':
-                inner_payload = data[8:]
-                decoded = abi.decode(
-                    ['bytes32[3]', 'bytes', 'bytes32[]', 'bytes32[]', 'bytes32'],
-                    bytes.fromhex(inner_payload)
-                )
-                report = decoded[1]
-                print(report.hex())
+            method_id = extract_method_id(data)
+            payload = extract_payload(data)
+            aggregator_address = tx['to']
+            if method_id in self._process_func:
+                decoded = self._process_func[method_id](payload)
+                if method_id == '6fadcf72':
+                    aggregator_address = decoded[0]
+                    decoded = self._process_transmit(decoded[1])
 
-            #     for v_addr in result:
-            #         await self._check_opportunity(v_addr, self._pre_onchain_price, tx_hash)
+                # 解析价格
+                digest = decoded[0][0].hex()
+                report = decoded[1]
+                prices = parse_prices(report)
+                final_price = sorted(prices)[len(prices) // 2]
+                decimals = self._digests_mapping['decimals']
+                price = final_price * (10 ** (18 - decimals)) # 将价格放缩为18位精度（wei)
+
+                if digest in self._digests_mapping:
+                    digest = self._digests_mapping[digest]
+                    vtoken_address = digest['v_address']
+                    self._pre_onchain_price[vtoken_address] = price
+                    await self._check_opportunity(vtoken_address, self._pre_onchain_price, tx_hash)
+                else:
+                    await self._db.save_or_update_digest_mapping(digest, {"aggregator_address": aggregator_address})
         except TransactionNotFound:
             return
 
@@ -155,6 +175,7 @@ class MonitorMemPool:
 
     async def run(self):
         await self._load_vtoken_cache_()
+        await self._load__digests_map_cache_()
 
         await asyncio.gather(
             self.listen_mempool(),

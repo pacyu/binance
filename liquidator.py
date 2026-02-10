@@ -54,7 +54,7 @@ class Liquidator:
     async def handle_liquidation(self, report, oracle_tx_hash: str = None):
         user_address = report['user_address']
 
-        if await self._db.should_skip(f"liquidator:skip:{user_address}"):
+        if await self._db.should_skip(user_address):
             return
 
         user_profile = await self.analyzer.get_user_snapshot([user_address])
@@ -111,7 +111,7 @@ class Liquidator:
 
         best_path = []
         max_amount = 0
-        pairs = await self._db.get_pairs(f"pair:{collateral_underlying_address}")
+        pairs = await self._db.get_pairs(collateral_underlying_address)
         if config.USDT_UNDER_ADDRESS in pairs:
             pair_addr = pairs[config.USDT_UNDER_ADDRESS]
             if pair_addr != debt_wbnb_pair_address:
@@ -126,8 +126,8 @@ class Liquidator:
                     pass
         for node, pair_address in pairs.items():
             if pair_address != debt_wbnb_pair_address:
-                if await self._db.exist_pair(f"pair:{node}", config.USDT_UNDER_ADDRESS):
-                    if await self._db.get_pair(f"pair:{node}", config.USDT_UNDER_ADDRESS) != debt_wbnb_pair_address:
+                if await self._db.exist_pair(node, config.USDT_UNDER_ADDRESS):
+                    if await self._db.get_pair(node, config.USDT_UNDER_ADDRESS) != debt_wbnb_pair_address:
                         path = [self._client.to_checksum_address(collateral_underlying_address),
                                 self._client.to_checksum_address(node),
                                 self._client.to_checksum_address(config.USDT_UNDER_ADDRESS)]
@@ -159,7 +159,7 @@ class Liquidator:
         """
         best_path = []
         min_pay_redeem_amount = float('inf')
-        pairs = await self._db.get_pairs(f"pair:{collateral_underlying_address}")
+        pairs = await self._db.get_pairs(collateral_underlying_address)
 
         if debt_underlying_address in pairs:
             pair_addr = pairs[debt_underlying_address]
@@ -176,8 +176,8 @@ class Liquidator:
 
         for node, pair_address in pairs.items():
             if pair_address != debt_wbnb_pair_address:
-                if await self._db.exist_pair(f"pair:{node}", debt_underlying_address):
-                    if await self._db.get_pair(f"pair:{node}", debt_underlying_address) != debt_wbnb_pair_address:
+                if await self._db.exist_pair(node, debt_underlying_address):
+                    if await self._db.get_pair(node, debt_underlying_address) != debt_wbnb_pair_address:
                         path = [self._client.to_checksum_address(collateral_underlying_address),
                                 self._client.to_checksum_address(node),
                                 self._client.to_checksum_address(debt_underlying_address)]
@@ -261,10 +261,10 @@ class Liquidator:
                                     18)
 
         if best_debt['underlying_address'] != config.WBNB_UNDER_ADDRESS:
-            pair_address = await self._db.get_pair(f"pair:{best_debt['underlying_address']}",
+            pair_address = await self._db.get_pair(best_debt['underlying_address'],
                                                    config.WBNB_UNDER_ADDRESS)
         else:
-            pair_address = await self._db.get_pair(f"pair:{best_debt['underlying_address']}",
+            pair_address = await self._db.get_pair(best_debt['underlying_address'],
                                                    config.USDT_UNDER_ADDRESS)
 
         # 1. 预估 gas 成本

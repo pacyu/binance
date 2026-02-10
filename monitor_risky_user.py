@@ -38,10 +38,7 @@ class MonitorRiskyUser:
         self.engine.set_execution_lock(self._execution_lock)
 
     async def _load_vtoken_cache_(self):
-        all_vtokens = await self._db.get_markets('asset:v_addr')
-        for item in all_vtokens:
-            token = json.loads(item)
-            self._vtoken_cache[token['address']] = token
+        self._vtoken_cache = await self._db.get_markets()
 
     async def _process_users(self, user_address_list, prices):
         try:
@@ -50,11 +47,13 @@ class MonitorRiskyUser:
             self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}")
 
     async def risky_user_check(self):
-        await self._db.remove_user_hf_by_score("high_risk_queue", 0, 0.2)
-        await self._db.remove_user_hf_by_score("high_risk_queue", 5, inf)
-        user_address_list = await self._db.get_user_hf_by_score('high_risk_queue', 0, inf)
+        await self._db.remove_user_health_factor_by_score(0, 0.2)
+        await self._db.remove_user_health_factor_by_score(5, inf)
+
+        user_address_list = await self._db.get_user_health_factor_by_score(0, inf)
         user_address_list = [user_address for user_address in user_address_list
-                             if not await self._db.should_skip(f"liquidator:skip:{user_address}")]
+                             if not await self._db.should_skip(user_address)]
+
         self.Log.info(f"本次扫描用户数量: {len(user_address_list)} 个")
 
         if not user_address_list:

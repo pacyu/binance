@@ -1,6 +1,7 @@
 import json
 import config
 
+
 class DataManager:
     def __init__(self, client, db):
         self._client = client
@@ -15,8 +16,8 @@ class DataManager:
             await self._db.save_user_wallets("wallet_address", user_address_list)
 
     async def update_pair_address(self):
-        markets = await self._db.get_markets('asset:v_addr')
-        u_address_list = list(map(lambda x: json.loads(x)['underlying_address'], markets))
+        markets = await self._db.get_markets()
+        u_address_list = list(map(lambda x: x['underlying_address'], markets.values()))
         for u_addr in u_address_list:
             for v_addr in u_address_list:
                 if u_addr != v_addr:
@@ -25,64 +26,63 @@ class DataManager:
                         await self._db.update_pair(f"pair:{u_addr}", v_addr, pair_address)
 
     async def update_oracle_sources(self):
-        abi = [
-            {"inputs":[{"internalType":"address","name":"asset","type":"address"},
-                       {"internalType":"enum ResilientOracle.OracleRole","name":"role","type":"uint8"}],
-             "name":"getOracle",
-             "outputs":[{"internalType":"address","name":"oracle","type":"address"},{"internalType":"bool","name":"enabled","type":"bool"}],
-             "stateMutability":"view",
-             "type":"function"
-             }
-        ]
-        chainlink_oracle_abi = [
+        proxy_abi = [
             {
-                "inputs": [{"internalType": "address", "name": "", "type": "address"}],
-                "name": "tokenConfigs",
-                "outputs": [
-                    {"internalType": "address", "name": "feed", "type": "address"},
-                    {"internalType": "uint256", "name": "maxStalePeriod", "type": "uint256"}
-                ],
+                "inputs": [],
+                "name": "description",
+                "outputs": [{"internalType": "string", "name": "", "type": "string"}],
+                "stateMutability": "view",
+                "type": "function",
+            },
+            {
+                "inputs": [],
+                "name": "decimals",
+                "outputs": [{"name": "", "type": "uint8"}],
+                "type": "function",
+            },
+            {
+                "inputs": [],
+                "name": "aggregator",
+                "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+                "stateMutability": "view",
+                "type": "function"
+            },
+        ]
+
+        digest_abi = [
+            {
+                "inputs": [],
+                "name": "latestConfigDetails",
+                "outputs": [{"name": "configCount", "type": "uint32"},
+                            {"name": "blockNumber", "type": "uint32"},
+                            {"name": "configDigest", "type": "bytes32"}],
                 "stateMutability": "view",
                 "type": "function"
             }
         ]
-        aggregator_abi = [{"inputs": [], "name": "aggregator",
-                           "outputs": [{"internalType": "address", "name": "", "type": "address"}],
-                           "stateMutability": "view", "type": "function"}]
+        for proxy_addr in list(config.PROXY_ADDRESSES):
+            proxy_contract = await self._client.get_async_contract(proxy_addr, proxy_abi)
+            decimals = await proxy_contract.functions.decimals().call()
+            desc = await proxy_contract.functions.description().call()
+            agg_addr = await proxy_contract.functions.aggregator().call()
 
-        oracle_contract = self._client.get_contract(config.ORACLE_ADDRESS, abi)
+            agg_contract = await self._client.get_async_contract(agg_addr, digest_abi)
+            _, _, digest = await agg_contract.functions.latestConfigDetails().call()
 
-        # 1. 获取所有 vToken
-        all_markets = await self._client.get_all_markets()
-        print(f"🔍 发现 {len(all_markets)} 个市场，正在检索价格源...")
-        for v_token_addr in all_markets:
-            token = json.loads(await self._db.get_vtoken("asset:v_addr", v_token_addr.lower()))
-            symbol = token['symbol']
+            symbol = desc.split(' / ')[0].lower()
 
-            # vBNB 的 underlying 处理 (Venus 内部 BNB 地址通常为 0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB)
-            if symbol == 'bnb':
-                underlying_addr = "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"  # BNB
-            else:
-                underlying_addr = self._client.to_checksum_address(token['underlying_address'])
+            v_address = await self._db.get_v_address_by_symbol(symbol)
+            if v_address:
+                item = {
+                    "aggregator_address": agg_addr,
+                    "proxy_address": proxy_addr,
+                    "symbol": symbol,
+                    "v_address": v_address,
+                    "decimals": decimals
+                }
+                print(f"✅ Digest: {digest.hex()} -> {desc} -> proxy_addr: {proxy_addr} -> Aggregator: {agg_addr}")
+                await self._db.save_or_update_digest_mapping(digest.hex(), item)
 
-            # 返回: (oracle_address, is_enabled)
-            oracle_info = oracle_contract.functions.getOracle(underlying_addr, 0).call()
-            sub_oracle_addr = oracle_info[0]
-
-            if sub_oracle_addr == "0x0000000000000000000000000000000000000000":
-                continue
-
-            # try:
-            plugin_contract = self._client.get_contract(sub_oracle_addr, chainlink_oracle_abi)
-            config_data = plugin_contract.functions.tokenConfigs(underlying_addr).call()
-            proxy_address = self._client.to_checksum_address(hex(config_data[1]))
-            proxy_contract = self._client.get_contract(proxy_address, aggregator_abi)
-            real_aggregator_address = proxy_contract.functions.aggregator().call()
-            print(symbol, sub_oracle_addr, real_aggregator_address)
-            await self._db.update_oracle_source(f"oracle:address:{real_aggregator_address}", symbol, v_token_addr.lower())
-            # except Exception as e:
-            #     print(e)
-            #     continue
 
 if __name__ == '__main__':
     from web3client import VenusClient
@@ -94,4 +94,3 @@ if __name__ == '__main__':
     manager = DataManager(client, r)
 
     asyncio.run(manager.update_oracle_sources())
-

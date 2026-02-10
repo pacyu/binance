@@ -37,10 +37,7 @@ class MonitorUsers:
         self.engine.set_execution_lock(self._execution_lock)
 
     async def _load_vtoken_cache_(self):
-        all_vtokens = await self._db.get_markets('asset:v_addr')
-        for item in all_vtokens:
-            token = json.loads(item)
-            self._vtoken_cache[token['address']] = token
+        self._vtoken_cache = await self._db.get_markets()
 
     async def _process_users(self, user_address_list, prices):
         try:
@@ -49,7 +46,7 @@ class MonitorUsers:
             self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}")
 
     async def full_scan(self):
-        user_address_list = list(await self._db.read_by_name('wallet_address'))
+        user_address_list = list(await self._db.get_user_wallets())
         self.Log.info(f"本次扫描用户数量: {len(user_address_list)} 个")
 
         if not user_address_list:

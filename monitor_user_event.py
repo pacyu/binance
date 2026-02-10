@@ -46,13 +46,10 @@ class MonitorUserEvent:
         self.engine.set_execution_lock(self._execution_lock)
 
     async def _load_vtoken_cache_(self):
-        all_vtokens = await self._db.get_markets('asset:v_addr')
-        for item in all_vtokens:
-            token = json.loads(item)
-            self._vtoken_cache[token['address']] = token
+        self._vtoken_cache = await self._db.get_markets()
 
     async def _process_and_analyze(self, user_address):
-        await self._db.save_user_wallet("wallet_address", user_address)
+        await self._db.save_user_wallet(user_address)
 
         user_profiles = await self.analyzer.get_user_snapshot([user_address])
         for user_address, user_profile in user_profiles.items():
@@ -62,10 +59,11 @@ class MonitorUserEvent:
             prices = await self._client.get_oracle_price(list(user_profile.keys()))
             hf = self.analyzer.calculate_hf(user_profile, prices)
             if hf <= 1.3:
-                await self._db.update_user_hf_in_order('high_risk_queue', {user_address: hf})
+                await self._db.save_or_update_user_health_factor({user_address: hf})
             else:
-                await self._db.remove_user_hf_from_high_risk('high_risk_queue', user_address)
-            await self._db.update_user_profile(f"user_profile:{user_address}", user_profile)
+                await self._db.remove_user_health_factor_by_wallet_address(user_address)
+
+            await self._db.update_user_profile(user_address, user_profile)
 
     async def _handle_user_event(self, task):
         user_address = task["address"]

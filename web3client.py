@@ -102,8 +102,134 @@ class VenusClient:
 
         :return: 42位以 0x 开头的地址字符串。
         """
-        comp_contract = await self.get_async_contract(self.comptroller_addr, abi.oracle_abi)
-        return await comp_contract.functions.oracle().call()
+        contract = await self.get_async_contract(self.comptroller_addr, abi.oracle_abi)
+        return await contract.functions.oracle().call()
+
+    def symbol(self, vtoken_address: str) -> str:
+        contract = self.get_contract(vtoken_address, abi.erc20_abi)
+        return contract.functions.symbol().call()
+
+    def underlying(self, vtoken_address: str) -> str:
+        contract = self.get_contract(vtoken_address, abi.erc20_abi)
+        return contract.functions.underlying().call()
+
+    def decimals(self, vtoken_address: str) -> int:
+        contract = self.get_contract(vtoken_address, abi.erc20_abi)
+        return contract.functions.decimals().call()
+
+    def markets(self, vtoken_address: str) -> Tuple:
+        contract = self.get_contract(config.VENUS_CORE_COMPTROLLER_ADDR, abi.comptroller_abi)
+        return contract.functions.markets(self.to_checksum_address(vtoken_address)).call()
+
+    async def get_all_markets(self) -> List[str]:
+        contract = await self.get_async_contract(config.VENUS_CORE_COMPTROLLER_ADDR, abi.comptroller_abi)
+        return await contract.functions.getAllMarkets().call()
+
+    async def get_amounts_in(self, amount: int, path: list):
+        router_contract = await self.get_async_contract(config.ROUTER_ADDRESS, abi.router_abi)
+        return await router_contract.functions.getAmountsIn(amount, path).call()
+
+    async def get_amounts_out(self, amount: int, path: list):
+        router_contract = await self.get_async_contract(config.ROUTER_ADDRESS, abi.router_abi)
+        return await router_contract.functions.getAmountsOut(amount, path).call()
+
+    async def get_assets_in(self, user_address: str) -> List[str]:
+        """
+        获取用户的所有资产地址
+
+        :param user_address: 用户地址
+        :return: list 资产地址列表
+        """
+        contract = await self.get_async_contract(config.VENUS_CORE_COMPTROLLER_ADDR, abi.comptroller_abi)
+        return await contract.functions.getAssetsIn(self.to_checksum_address(user_address)).call()
+
+    async def get_liquidation_incentive_mantissa(self, v_address: str) -> float:
+        """
+        获取清算奖励比例。
+
+        :param v_address: 代币地址
+        :return: float
+        """
+        contract = await self.get_async_contract(v_address, abi.incentive_mantissa_abi)
+        return await contract.functions.liquidationIncentiveMantissa().call()
+
+    def description(self, address: str) -> str:
+        contract = self.get_contract(address, abi.proxy_abi)
+        return contract.functions.description().call()
+
+    def aggregator(self, address: str) -> str:
+        contract = self.get_contract(address, abi.proxy_abi)
+        return contract.functions.aggregator().call()
+
+    def latest_config_details(self, aggregator_address: str) -> str:
+        contract = self.get_contract(aggregator_address, abi.digest_abi)
+        return contract.functions.latestConfigDetails().call()
+
+    def get_exchange_rate(self, vtoken_address: str) -> int:
+        contract = self.get_contract(vtoken_address, abi.exchange_rate_abi)
+        return contract.functions.exchangeRateStored().call()
+
+    async def get_cash(self, v_address: str) -> float:
+        v_contract = await self.get_async_contract(v_address, abi.erc20_abi)
+        return await v_contract.functions.getCash().call()
+
+    async def get_transaction(self, tx_hash: HexBytes) -> TxData:
+        return await self._async_w3.eth.get_transaction(tx_hash)
+
+    async def get_raw_transaction(self, tx_hash: HexBytes) -> HexBytes:
+        return await self._async_w3.eth.get_raw_transaction(tx_hash)
+
+    async def get_pair(self, address0: str, address1: str) -> str:
+        contract = await self.get_async_contract(config.PANCAKE_FACTORY_ADDR, abi.pair_abi)
+        return await contract.functions.getPair(self.to_checksum_address(address0),
+                                                self.to_checksum_address(address1)).call()
+
+    async def get_reserves(self, address: str) -> Tuple:
+        contract = await self.get_async_contract(address, abi.reserves_abi)
+        reserves = await contract.functions.getReserves().call()
+        token0 = await contract.functions.token0().call()
+        token1 = await contract.functions.token1().call()
+        return reserves, token0, token1
+
+    async def get_token_info(self, v_addr: str) -> dict:
+        """
+        获取vToken的底层基本信息
+
+        :param v_addr: vToken 地址
+        :return: 字典
+        """
+        comp_contract = await self.get_async_contract(config.VENUS_CORE_COMPTROLLER_ADDR, abi.comptroller_abi)
+        v_contract = await self.get_async_contract(v_addr, abi.erc20_abi)
+        v_symbol = await v_contract.functions.symbol(v_addr).call()
+        underlying_addr = await v_contract.functions.underlying(v_addr)
+
+        if v_addr.lower() == config.BNB_ADDRESS:
+            symbol = "BNB"
+            underlying_decimal = 18
+            is_native = True
+        else:
+            u_contract = await self.get_async_contract(underlying_addr, abi.erc20_abi)
+            underlying_decimal = await u_contract.functions.decimals(underlying_addr)
+            raw_symbol = await u_contract.functions.symbol(underlying_addr)
+            symbol = raw_symbol.replace(" ", "")  # 某些代币符号带空格
+            is_native = False
+
+        # 从 Comptroller 获取抵押因子 (CF)
+        # markets 返回值是一个元组，通常 index 1 是 collateralFactorMantissa
+        market_info = await comp_contract.functions.markets(v_addr).call()
+        cf = market_info[1] / 1e18  # 转换为 0.825 这种格式
+
+        return {
+            "symbol": symbol.lower(),
+            "v_symbol": v_symbol,
+            "underlying_address": (config.WBNB_UNDER_ADDRESS if is_native else underlying_addr.lower()),
+            "address": v_addr.lower(),
+            "underlying_decimal": underlying_decimal,
+            "cf": cf,
+            "is_native": is_native,
+            "venus_supported": True,
+            "oracle_precision": 10 ** (36 - underlying_decimal),
+        }
 
     async def get_account_snapshot(self, user_address_or_list: List[str]) -> AccountSnapshot:
         """
@@ -130,122 +256,6 @@ class VenusClient:
                 )
         snapshots = await Multicall(calls, _w3=self._w3).coroutine()
         return snapshots
-
-    async def symbol(self, vtoken_address: str) -> str:
-        contract = await self.get_async_contract(vtoken_address, abi.vtoken)
-        return await contract.functions.symbol().call()
-
-    async def underlying(self, vtoken_address: str) -> str:
-        contract = await self.get_async_contract(vtoken_address, abi.vtoken)
-        return await contract.functions.underlying().call()
-
-    async def get_all_markets(self) -> List[str]:
-        contract = await self.get_async_contract(config.VENUS_CORE_COMPTROLLER_ADDR, abi.comptroller)
-        return await contract.functions.getAllMarkets().call()
-
-    async def get_amounts_in(self, amount: int, path: list):
-        router_contract = await self.get_async_contract(config.ROUTER_ADDRESS, abi.router_abi)
-        return await router_contract.functions.getAmountsIn(amount, path).call()
-
-    async def get_amounts_out(self, amount: int, path: list):
-        router_contract = await self.get_async_contract(config.ROUTER_ADDRESS, abi.router_abi)
-        return await router_contract.functions.getAmountsOut(amount, path).call()
-
-    async def get_assets_in(self, user_address: str) -> List[str]:
-        """
-        获取用户的所有资产地址
-
-        :param user_address: 用户地址
-        :return: list 资产地址列表
-        """
-        comp_contract = await self.get_async_contract(config.VENUS_CORE_COMPTROLLER_ADDR, abi.comptroller)
-        return await comp_contract.functions.getAssetsIn(self.to_checksum_address(user_address)).call()
-
-    async def get_liquidation_incentive(self, v_address: str) -> float:
-        """
-        获取清算奖励比例。
-
-        :param v_address: 代币地址
-        :return: float
-        """
-        contract = await self.get_async_contract(v_address, abi.incentive_mantissa_abi)
-        mantissa = await contract.functions.liquidationIncentiveMantissa().call()
-        return mantissa / 10 ** 18
-
-    async def description(self, aggregator_address: str) -> str:
-        contract = await self.get_async_contract(aggregator_address, abi.description_abi)
-        return await contract.functions.description().call()
-
-    def get_exchange_rate(self, vtoken_address: str) -> float:
-        contract = self.get_contract(vtoken_address, abi.exchange_rate_abi)
-        return contract.functions.exchangeRateStored().call()
-
-    async def get_cash(self, v_address: str) -> float:
-        v_contract = await self.get_async_contract(v_address, abi.erc20_abi)
-        return await v_contract.functions.getCash().call()
-
-    async def get_transaction(self, tx_hash: HexBytes) -> TxData:
-        return await self._async_w3.eth.get_transaction(tx_hash)
-
-    async def get_raw_transaction(self, tx_hash: HexBytes) -> HexBytes:
-        return await self._async_w3.eth.get_raw_transaction(tx_hash)
-
-    async def get_pair(self, address0: str, address1: str) -> str:
-        contract = await self.get_async_contract(config.PANCAKE_FACTORY_ADDR, abi.pair_abi)
-        return await contract.functions.getPair(self.to_checksum_address(address0),
-                                                self.to_checksum_address(address1)).call()
-
-    async def get_reserves(self, address: str) -> Tuple:
-        contract = await self.get_async_contract(address, abi.reserves_abi)
-        reserves = await contract.functions.getReserves().call()
-        token0 = await contract.functions.token0().call()
-        token1 = await contract.functions.token1().call()
-        return reserves, token0, token1
-
-    async def get_vtoken(self, v_addr: str) -> dict:
-        """
-        获取vToken的底层基本信息
-
-        :param v_addr: vToken 地址
-        :return: 字典
-        """
-        # 1. 初始化合约
-        comp_contract = await self.get_async_contract(self.comptroller_addr, abi.comptroller)
-        v_contract = await self.get_async_contract(v_addr, abi.vtoken)
-
-        # 2. 获取 vToken 信息
-        v_symbol = await v_contract.functions.symbol().call()
-        underlying_addr = await v_contract.functions.underlying().call()
-
-        # 3. 特殊处理原生代币 (BNB)
-        if v_addr.lower() == "0xa07c5b74c9b40447a954e1466938b865b6bbea36":
-            symbol = "BNB"
-            underlying_decimal = 18
-            is_native = True
-        else:
-            u_contract = await self.get_async_contract(underlying_addr, abi.erc20_abi)
-            underlying_decimal = await u_contract.functions.decimals().call()
-            raw_symbol = await u_contract.functions.symbol().call()
-            symbol = raw_symbol.replace(" ", "")  # 某些代币符号带空格
-            is_native = False
-
-        # 4. 从 Comptroller 获取抵押因子 (CF)
-        # markets 返回值是一个元组，通常 index 1 是 collateralFactorMantissa
-        market_info = await comp_contract.functions.markets(self.to_checksum_address(v_addr)).call()
-        cf = market_info[1] / 1e18  # 转换为 0.825 这种格式
-
-        # 5. 构建你的数据结构
-        return {
-            "symbol": symbol.lower(),
-            "v_symbol": v_symbol,
-            "underlying_address": (config.WBNB_UNDER_ADDRESS if is_native else underlying_addr.lower()),
-            "address": v_addr.lower(),
-            "underlying_decimal": underlying_decimal,
-            "cf": cf,
-            "is_native": is_native,
-            "venus_supported": True,
-            "oracle_precision": 10 ** (36 - underlying_decimal),
-        }
 
     async def get_oracle_price(self, vtoken_or_list: List[str]) -> Dict[str, int]:
         """
@@ -482,7 +492,7 @@ class VenusClient:
         if not self.private_key:
             raise ValueError("Private key is required for sending transactions.")
 
-        v_contract = self.get_contract(vtoken_debt_address, abi.vtoken)
+        v_contract = self.get_contract(vtoken_debt_address, abi.liquidate_borrow_abi)
 
         # 自动管理 Nonce
         nonce = self.get_transaction_count()

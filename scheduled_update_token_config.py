@@ -1,4 +1,3 @@
-import json
 import config
 import asyncio
 from redis_client import RedisClient
@@ -22,7 +21,7 @@ class Run:
 
         print(f"📡 发现 Venus 核心池共 {len(all_markets)} 个市场，开始扫描...")
 
-        # 2. 第一轮 Multicall: 获取所有 vToken 的 Symbol 和底层资产地址
+        # 2. 第一轮 Multicall: 获取所有 vToken 的 symbol 和底层资产地址
         calls_v = []
         for addr in all_markets:
             calls_v.append(Call(addr, ['symbol()(string)'], [(f"v_sym_{addr}", lambda x: x)]))
@@ -36,7 +35,7 @@ class Run:
 
         res_v = await Multicall(calls_v, _w3=self._client.get_w3()).coroutine()
 
-        # 3. 第二轮 Multicall: 获取底层资产的 Decimals 和真正的 Symbol
+        # 3. 第二轮 Multicall: 获取底层资产的 decimals 和真正的 symbol
         calls_u = []
         vtoken_to_underlying = {}
 
@@ -74,10 +73,10 @@ class Run:
                 "venus_supported": u_sym.lower() in local_symbols_set,
                 "oracle_precision": 10 ** (36 - u_dec),
             }
-            await self._db.update_venus_vtoken('asset:symbol', u_sym.lower(), json.dumps(token_dict))
-            await self._db.update_venus_vtoken('asset:v_addr', v_addr.lower(), json.dumps(token_dict))
-            await self._db.update_token_to_symbol('asset:vtoken_map', {v_addr.lower(): u_sym.lower()})
-            await self._db.update_token_to_symbol('asset:symbol_map', {u_sym.lower(): v_addr.lower()})
+            await self._db.update_currency_symbol_map(u_sym.lower(), token_dict)
+            await self._db.update_currency_address_map(v_addr.lower(), token_dict)
+            await self._db.update_currency_map({v_addr.lower(): u_sym.lower()})
+            await self._db.update_symbol_map({u_sym.lower(): v_addr.lower()})
 
 
 if __name__ == '__main__':

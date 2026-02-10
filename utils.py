@@ -34,6 +34,22 @@ def get_binance_symbols() -> list:
         print(f"❌ 获取失败: {e}")
         return []
 
+def extract_method_id(data: str) -> str:
+    return data[:8]
+
+def extract_payload(data: str) -> str:
+    return data[8:]
+
+def parse_prices(report_bytes):
+    prices = []
+    offset = 96  # 0x60
+    while offset + 32 <= len(report_bytes):
+        price_bytes = report_bytes[offset:offset+32]
+        price = int.from_bytes(price_bytes, byteorder='big', signed=True)
+        prices.append(price)
+        offset += 32
+    return prices
+
 def usd_to_wei(optimal_usd, oracle_price_mantissa, token_decimals) -> int:
     """
     optimal_usd: 你的算法算出的最优美金数 (float/decimal)

@@ -4,150 +4,181 @@ class RedisClient:
     def __init__(self, host='localhost', port=6379, db=0):
         self._db = Redis(host=host, port=port, db=db, decode_responses=True)
 
-    async def save_user_wallet(self, name, address):
+    async def save_user_wallet(self, address: str):
+        name = "wallet:address"
         await self._db.sadd(name, address)
 
-    async def save_user_wallets(self, name, address_list):
+    async def save_user_wallets(self, address_list: list):
+        name = "wallet:address"
         await self._db.sadd(name, *address_list)
         print(f"保存成功！库内地址数: {await self._db.scard(name)}")
 
-    async def exist_user_wallet(self, name, wallet_address):
+    async def exist_user_wallet(self, wallet_address: str):
+        name = "wallet:address"
         return await self._db.sismember(name, wallet_address)
 
-    async def update_user_hf_in_order(self, name, item):
-        await self._db.zadd(name, item)
+    async def get_user_wallets(self):
+        name = "wallet:address"
+        return await self._db.smembers(name)
 
-    async def get_user_hf_by_score(self, name, x, y, withscores=False):
+    async def save_or_update_user_health_factor(self, item: dict):
+        name = "wallet:health_factor"
+        await self._db.zadd(name, mapping=item)
+
+    async def get_user_health_factor_by_score(self, x: float, y: float, withscores: bool=False):
+        name = "wallet:health_factor"
         return await self._db.zrangebyscore(name, x, y, withscores=withscores)
 
-    async def remove_user_hf_from_high_risk(self, name, user_address):
+    async def remove_user_health_factor_by_wallet_address(self, user_address: str):
+        name = "wallet:health_factor"
         await self._db.zrem(name, user_address)
 
-    async def remove_user_hf_by_score(self, name, x, y):
-        await self._db.zremrangebyscore(name, x, y)
+    async def remove_user_health_factor_by_score(self, x: float, y: float) -> bool:
+        name = "wallet:health_factor"
+        return await self._db.zremrangebyscore(name, x, y) > 0
 
-    async def should_skip(self, name):
+    async def should_skip(self, user_address: str):
+        name = f"liquidator:skip:{user_address}"
         return await self._db.exists(name)
 
-    async def mark_as_non_liquidable(self, name, ttl=600, value=""):
+    async def mark_as_non_liquidable(self, user_address: str, ttl: int=600, value: str=""):
+        name = f"liquidator:skip:{user_address}"
         await self._db.set(name, value, ex=ttl, nx=True)
 
-    async def update_cooldown_list(self, name, ttl=600):
-        await self._db.set(name, '1', ex=ttl, nx=True)
-
-    async def update_user_asset_map_list(self, name, user_address):
+    async def update_user_asset_map(self, v_address: str, user_address: str):
+        name = f'asset:users:{v_address}'
         await self._db.sadd(name, user_address)
 
-    async def get_user_asset_map_list(self, name):
+    async def get_holder_by_currency(self, v_address: str):
+        name = f'asset:users:{v_address}'
         return await self._db.smembers(name)
 
-    async def update_user_profile(self, name, user_profile):
+    async def update_user_profile(self, user_address: str, user_profile: dict):
+        name = f"user_profile:{user_address}"
         await self._db.hset(name, mapping=user_profile)
 
-    async def exist_user_profile(self, name):
+    async def exist_user_profile(self, user_address: str):
+        name = f"user_profile:{user_address}"
         return await self._db.exists(name)
 
-    async def get_user_profile(self, name):
+    async def get_user_profile(self, user_address: str):
+        name = f"user_profile:{user_address}"
         return await self._db.hgetall(name)
 
-    async def remove_user_profile(self, name):
+    async def remove_user_profile(self, user_address: str):
+        name = f"user_profile:{user_address}"
         await self._db.delete(name)
 
-    async def get_all_users(self, name):
-        return await self._db.keys(name)
-
-    async def update_exchange_rate(self, name, value):
+    async def update_exchange_rate(self, v_address: str, value: int):
+        name = f"rate:{v_address}"
         await self._db.set(name, value)
 
-    async def get_exchange_rate(self, name):
+    async def get_exchange_rate(self, v_address: str):
+        name = f"rate:{v_address}"
         return await self._db.get(name)
 
-    async def update_pair(self, name, key, value):
+    async def update_pair(self, underlying_address: str, key: str, value: str):
+        name = f"pair:{underlying_address}"
         await self._db.hset(name, key, value)
 
-    async def get_pair(self, name, key):
+    async def get_pair(self, underlying_address: str, key: str):
+        name = f"pair:{underlying_address}"
         return await self._db.hget(name, key)
 
-    async def get_pairs(self, name):
+    async def get_pairs(self, underlying_address: str):
+        name = f"pair:{underlying_address}"
         return await self._db.hgetall(name)
 
-    async def exist_pair(self, name, key):
+    async def exist_pair(self, underlying_address: str, key: str) -> bool:
+        name = f"pair:{underlying_address}"
         return await self._db.hexists(name, key)
 
-    async def remove_pair(self, name):
+    async def remove_pair(self, underlying_address: str):
+        name = f"pair:{underlying_address}"
         await self._db.delete(name)
 
-    async def get_pair_pool(self, name):
-        return await self._db.hgetall(name)
-
-    async def update_venus_vtoken(self, name, key, value):
-        await self._db.hset(name, key, value)
-
-    async def update_token_to_symbol(self, name, item):
+    async def update_currency_symbol_map(self, symbol: str, item: dict):
+        name = f'currency:symbol:{symbol}'
         await self._db.hset(name, mapping=item)
 
-    async def read_by_name(self, name):
-        return await self._db.smembers(name)
+    async def update_currency_address_map(self, address: str, item: dict):
+        name = f'currency:address:{address}'
+        await self._db.hset(name, mapping=item)
+
+    async def update_currency_map(self, item: dict):
+        name = "currency:map:address:symbol"
+        await self._db.hset(name, mapping=item)
+
+    async def update_symbol_map(self, item: dict):
+        name = "currency:map:symbol:address"
+        await self._db.hset(name, mapping=item)
+
+    async def get_v_address_by_symbol(self, symbol: str):
+        name = "currency:map:symbol:address"
+        return await self._db.hget(name, symbol)
 
     async def get_all_symbols(self):
-        return await self._db.hvals("asset:vtoken_map")
+        name = "currency:map:address:symbol"
+        return await self._db.hvals(name)
 
-    async def get_all_tokens(self):
-        return await self._db.hvals("asset:symbol_map")
+    async def get_all_currencies(self):
+        name = "currency:map:symbol:address"
+        return await self._db.hvals(name)
 
-    async def get_tokens_by_symbols(self, name, symbols):
+    async def get_currencies_by_symbols(self, symbols: list):
+        name = "currency:map:symbol:address"
         return await self._db.hmget(name, symbols)
 
-    async def get_symbols_by_tokens(self, name, tokens):
-        return await self._db.hmget(name, tokens)
+    async def get_symbols_by_currencies(self, currencies: list):
+        name = "currency:map:address:symbol"
+        return await self._db.hmget(name, currencies)
 
-    async def vtoken_exists(self, name, address):
-        return await self._db.hexists(name, address)
+    async def get_markets(self):
+        match = "currency:address：*"
+        cursor = 0
+        keys = []
+        while True:
+            cursor, batch = self._db.scan(cursor=cursor, match=match, count=200)
+            keys.extend(batch)
+            if cursor == 0:
+                break
+        pipe = await self._db.pipeline()
+        for key in keys:
+            await pipe.hgetall(key)
+        results = await pipe.execute()
+        return {key.replace('currency:address:', ''): value for key, value in zip(keys, results)}
 
-    async def get_markets(self, name):
-        return await self._db.hvals(name)
+    async def save_or_update_digest_mapping(self, digest: str, item: dict):
+        name = f"currency:digest:{digest}"
+        await self._db.hset(name, mapping=item)
 
-    async def get_vtoken(self, name, key):
-        return await self._db.hget(name, key)
-
-    async def update_oracle_source(self, name, key, value):
-        await self._db.hset(name, key, value)
-
-    async def exist_oracle_source(self, name):
-        return await self._db.exists(name)
-
-    async def get_oracle_source(self, name):
-        return await self._db.hvals(name)
-
-    async def update_last_block(self, name, value):
-        await self._db.set(name, value)
-
-    async def get_last_block(self, name):
-        return await self._db.get(name)
-
-    async def update_binance_price(self, name, key, value):
-        await self._db.hset(name, key, value)
-
-    async def get_binance_price(self, name, key):
-        return await self._db.hget(name, key)
-
-    async def get_binance_prices(self, name):
+    async def get_digest_mapping(self, digest: str):
+        name = f"currency:digest:{digest}"
         return await self._db.hgetall(name)
 
-    async def scan(self, cursor, match, count):
-        return await self._db.scan(cursor, match, count)
+    async def get_all_digests(self) -> dict:
+        match = "currency:digest:*"
+        cursor = 0
+        keys = []
+        while True:
+            cursor, batch = self._db.scan(cursor=cursor, match=match, count=200)
+            keys.extend(batch)
+            if cursor == 0:
+                break
+        pipe = await self._db.pipeline()
+        for key in keys:
+            await pipe.hgetall(key)
+        results = await pipe.execute()
+        return {key.replace('currency:digest:', ''): value for key, value in zip(keys, results)}
 
-    def scan_iter(self, match):
-        return self._db.scan_iter(match)
+    async def save_or_update_binance_price(self, item: dict):
+        name = f"binance:price"
+        await self._db.hset(name, mapping=item)
 
-    async def set(self, name, value):
-        return await self._db.set(name, value)
+    async def get_binance_price(self, key: str):
+        name = f"binance:price"
+        return await self._db.hget(name, key)
 
-    async def get(self, name):
-        return await self._db.get(name)
-
-    async def delete(self, name):
-        return await self._db.delete(name)
-
-    async def exist(self, name):
-        return await self._db.exists(name)
+    async def get_binance_prices(self):
+        name = f"binance:price"
+        return await self._db.hgetall(name)

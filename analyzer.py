@@ -38,7 +38,7 @@ class Analyzer:
         return float('inf')
 
     async def analyze_user(self, user_address: str, prices: dict) -> dict:
-        user_profile = await self._db.get_user_profile(f"user_profile:{user_address}")
+        user_profile = await self._db.get_user_profile(user_address)
         if not user_profile:
             user_profile = await self.get_user_snapshot([user_address])
             if not user_profile or not user_profile[user_address]:
@@ -48,11 +48,11 @@ class Analyzer:
                     "is_liquidatable": False,
                 }
             user_profile = user_profile[user_address]
-            await self._db.update_user_profile(f"user_profile:{user_address}", user_profile)
+            await self._db.update_user_profile(user_address, user_profile)
 
         hf = self.calculate_hf(user_profile, prices)
         if 0 < hf <= 1.3:
-            await self._db.update_user_hf_in_order("high_risk_queue", {user_address: hf})
+            await self._db.save_or_update_user_health_factor({user_address: hf})
 
         report = {
             "user_address": user_address,
@@ -71,9 +71,9 @@ class Analyzer:
 
             hf = self.calculate_hf(user_profile, prices)
             if 0 < hf <= 1.3:
-                await self._db.update_user_hf_in_order('high_risk_queue', {user_address: hf})
+                await self._db.save_or_update_user_health_factor({user_address: hf})
 
-            await self._db.update_user_profile(f"user_profile:{user_address}", user_profile)
+            await self._db.update_user_profile(user_address, user_profile)
 
             report = {
                 "user_address": user_address,
@@ -89,7 +89,7 @@ class Analyzer:
         user_profile = {}
         wad = 10 ** 18
         for addr, snapshot in results.items():
-            user_addr, v_addr = addr.split('|')
+            user_address, v_address = addr.split('|')
             err, vtoken_bal, borrow_bal, exchange_rate = snapshot
 
             if err != 0:
@@ -106,8 +106,8 @@ class Analyzer:
             amount = collateral_underlying - debt_underlying
 
             if abs(amount) > 1e-9:  # 过滤极小值
-                if user_addr not in user_profile:
-                    user_profile[user_addr] = {}
-                user_profile[user_addr][v_addr] = amount
-                await self._db.update_user_asset_map_list(f'asset:users:{v_addr}', user_addr)
+                if user_address not in user_profile:
+                    user_profile[user_address] = {}
+                user_profile[user_address][v_address] = amount
+                await self._db.update_user_asset_map(v_address, user_address)
         return user_profile
