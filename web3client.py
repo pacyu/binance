@@ -172,6 +172,10 @@ class VenusClient:
         mantissa = await contract.functions.liquidationIncentiveMantissa().call()
         return mantissa / 10 ** 18
 
+    async def description(self, aggregator_address: str) -> str:
+        contract = await self.get_async_contract(aggregator_address, abi.description_abi)
+        return await contract.functions.description().call()
+
     def get_exchange_rate(self, vtoken_address: str) -> float:
         contract = self.get_contract(vtoken_address, abi.exchange_rate_abi)
         return contract.functions.exchangeRateStored().call()

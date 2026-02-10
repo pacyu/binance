@@ -100,6 +100,9 @@ venus_oracle = [{
     "stateMutability": "view",
     "type": "function"
 }]
+description_abi = [
+    {"inputs":[],"name":"description","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},
+]
 event_abi = [
     {
     "anonymous": False,
