@@ -138,7 +138,7 @@ class RedisClient:
         cursor = 0
         keys = []
         while True:
-            cursor, batch = self._db.scan(cursor=cursor, match=match, count=200)
+            cursor, batch = await self._db.scan(cursor=cursor, match=match, count=200)
             keys.extend(batch)
             if cursor == 0:
                 break
@@ -161,7 +161,7 @@ class RedisClient:
         cursor = 0
         keys = []
         while True:
-            cursor, batch = self._db.scan(cursor=cursor, match=match, count=200)
+            cursor, batch = await self._db.scan(cursor=cursor, match=match, count=200)
             keys.extend(batch)
             if cursor == 0:
                 break

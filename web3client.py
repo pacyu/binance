@@ -74,8 +74,8 @@ class VenusClient:
         contract = self._async_w3.eth.contract(abi=abi.event_abi)
         return contract.events
 
-    async def get_block_number(self) -> BlockNumber:
-        return await self._async_w3.eth.block_number
+    def get_block_number(self) -> BlockNumber:
+        return self._w3.eth.block_number
 
     def keccak(self, signature: str) -> bytes:
         return self._w3.keccak(text=signature)
@@ -327,7 +327,7 @@ class VenusClient:
             raise ValueError("BLOXROUTE API key or BLOXROUTE Authorization HEADER is required for sending a bundle.")
 
         txs = [oracle_tx.replace('0x', ''), signed_tx.replace('0x', '')]
-        block_number = await self.get_block_number()
+        block_number = self.get_block_number()
         params = {
             "transactions": txs,
             "block_number": hex(block_number + 1),

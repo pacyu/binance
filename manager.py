@@ -9,11 +9,10 @@ class DataManager:
 
     async def scan_user_address(self, start_block, end_block):
         print(f"正在扫描从 {start_block} 到 {end_block} 的链上用户借款日志...")
-        user_address_list = self._client.fetch_user_address(start_block, end_block)
-        await self._db.update_last_block('last_block', end_block)
-        print(user_address_list)
+        user_address_list = await self._client.fetch_user_address(start_block, end_block)
+        print(end_block)
         if user_address_list:
-            await self._db.save_user_wallets("wallet_address", user_address_list)
+            await self._db.save_user_wallets(user_address_list)
 
     async def update_pair_address(self):
         markets = await self._db.get_markets()
@@ -90,7 +89,11 @@ if __name__ == '__main__':
     import asyncio
 
     r = RedisClient()
-    client = VenusClient(config.ALCHEMY_BSC_RPC_URL, config.VENUS_CORE_COMPTROLLER_ADDR)
+    client = VenusClient(config.CHAINSTACK_RPC_URL, config.VENUS_CORE_COMPTROLLER_ADDR)
     manager = DataManager(client, r)
 
-    asyncio.run(manager.update_oracle_sources())
+    latest_block_number = client.get_block_number()
+    start_block_number = latest_block_number - 365 * 28800
+    step = 100
+    for i in range(start_block_number, latest_block_number, step):
+        asyncio.run(manager.scan_user_address(i, i + step))

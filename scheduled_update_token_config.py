@@ -69,8 +69,8 @@ class Run:
                 "address": v_addr.lower(),
                 "underlying_decimal": u_dec,
                 "cf": info['cf'],  # 抵押因子
-                "is_native": info['is_native'],
-                "venus_supported": u_sym.lower() in local_symbols_set,
+                "is_native": str(info['is_native']).lower(),
+                "venus_supported": str(u_sym.lower() in local_symbols_set).lower(),
                 "oracle_precision": 10 ** (36 - u_dec),
             }
             await self._db.update_currency_symbol_map(u_sym.lower(), token_dict)

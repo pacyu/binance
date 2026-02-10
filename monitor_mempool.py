@@ -121,8 +121,8 @@ class MonitorMemPool:
                     vtoken_address = digest['v_address']
                     self._pre_onchain_price[vtoken_address] = price
                     await self._check_opportunity(vtoken_address, self._pre_onchain_price, tx_hash)
-                else:
-                    await self._db.save_or_update_digest_mapping(digest, {"aggregator_address": aggregator_address})
+                # else:
+                #     await self._db.save_or_update_digest_mapping(digest, {"aggregator_address": aggregator_address})
         except TransactionNotFound:
             return
 
@@ -174,6 +174,7 @@ class MonitorMemPool:
                 self._task_queue.task_done()
 
     async def run(self):
+        await self._init_price_()
         await self._load_vtoken_cache_()
         await self._load__digests_map_cache_()
 
