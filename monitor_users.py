@@ -31,13 +31,12 @@ class MonitorUsers:
         self.engine = Liquidator(self._client, self._db, self.analyzer, self.Log)
 
         self._execution_lock = asyncio.Lock()
-
-        self.analyzer.set_vtoken_cache(self._vtoken_cache)
-        self.engine.set_vtoken_cache(self._vtoken_cache)
         self.engine.set_execution_lock(self._execution_lock)
 
     async def _load_vtoken_cache_(self):
         self._vtoken_cache = await self._db.get_markets()
+        self.analyzer.set_vtoken_cache(self._vtoken_cache)
+        self.engine.set_vtoken_cache(self._vtoken_cache)
 
     async def _process_users(self, user_address_list, prices):
         # try:

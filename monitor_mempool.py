@@ -81,6 +81,7 @@ class MonitorMemPool:
         async with self._semaphore:
             risky_report = await self.analyzer.analyze_user(u_addr, prices)
             if risky_report['is_liquidatable']:
+                self.Log.info(f"⚠️ 用户 {u_addr} 资产进入警戒线，立即触发清算!")
                 await self.engine.handle_liquidation(risky_report, oracle_tx_hash)
 
     async def _check_opportunity(self, vtoken_addr, prices, oracle_tx_hash: str = None):
@@ -101,28 +102,28 @@ class MonitorMemPool:
             data = tx['input'].hex()
             method_id = extract_method_id(data)
             payload = extract_payload(data)
-            aggregator_address = tx['to']
             if method_id in self._process_func:
                 decoded = self._process_func[method_id](payload)
                 if method_id == '6fadcf72':
-                    aggregator_address = decoded[0]
                     decoded = self._process_transmit(decoded[1])
 
-                # 解析价格
                 digest = decoded[0][0].hex()
-                report = decoded[1]
-                prices = parse_prices(report)
-                final_price = sorted(prices)[len(prices) // 2]
-                decimals = self._digests_mapping['decimals']
-                price = final_price * (10 ** (18 - decimals)) # 将价格放缩为18位精度（wei)
-
                 if digest in self._digests_mapping:
-                    digest = self._digests_mapping[digest]
-                    vtoken_address = digest['v_address']
+                    digest_config = self._digests_mapping[digest]
+                    # 解析价格
+                    report = decoded[1]
+                    prices = parse_prices(report)
+                    final_price = sorted(prices)[len(prices) // 2]
+                    decimals = digest_config['decimals']
+                    price = final_price * (10 ** (18 - decimals)) # 将价格放缩为18位精度（wei)
+
+                    symbol = digest_config['symbol']
+                    vtoken_address = digest_config['v_address']
+                    last_price = self._pre_onchain_price[vtoken_address]
                     self._pre_onchain_price[vtoken_address] = price
+                    deviation = price - last_price / price
+                    self.Log.info(f"🔍 发现代币 {symbol} 价格即将更新! 交易价格变化: {last_price} -> {price} | 波动偏差: {abs(deviation) * 100:.f}%")
                     await self._check_opportunity(vtoken_address, self._pre_onchain_price, tx_hash)
-                # else:
-                #     await self._db.save_or_update_digest_mapping(digest, {"aggregator_address": aggregator_address})
         except TransactionNotFound:
             return
 

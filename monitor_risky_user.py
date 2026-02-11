@@ -32,19 +32,18 @@ class MonitorRiskyUser:
         self.engine = Liquidator(self._client, self._db, self.analyzer, self.Log)
 
         self._execution_lock = asyncio.Lock()
-
-        self.analyzer.set_vtoken_cache(self._vtoken_cache)
-        self.engine.set_vtoken_cache(self._vtoken_cache)
         self.engine.set_execution_lock(self._execution_lock)
 
     async def _load_vtoken_cache_(self):
         self._vtoken_cache = await self._db.get_markets()
+        self.analyzer.set_vtoken_cache(self._vtoken_cache)
+        self.engine.set_vtoken_cache(self._vtoken_cache)
 
     async def _process_users(self, user_address_list, prices):
-        try:
+        # try:
             await self.engine.handle_multi_liquidation(user_address_list, prices)
-        except Exception as e:
-            self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}")
+        # except Exception as e:
+        #     self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}")
 
     async def risky_user_check(self):
         await self._db.remove_user_health_factor_by_score(0, 0.2)

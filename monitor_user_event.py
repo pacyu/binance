@@ -40,20 +40,20 @@ class MonitorUserEvent:
         self._vtoken_cache = {}
 
         self._execution_lock = asyncio.Lock()
-
-        self.analyzer.set_vtoken_cache(self._vtoken_cache)
-        self.engine.set_vtoken_cache(self._vtoken_cache)
         self.engine.set_execution_lock(self._execution_lock)
 
     async def _load_vtoken_cache_(self):
         self._vtoken_cache = await self._db.get_markets()
+        self.analyzer.set_vtoken_cache(self._vtoken_cache)
+        self.engine.set_vtoken_cache(self._vtoken_cache)
 
     async def _process_and_analyze(self, user_address):
         await self._db.save_user_wallet(user_address)
-
         user_profiles = await self.analyzer.get_user_snapshot([user_address])
+
         for user_address, user_profile in user_profiles.items():
             if not user_profile:
+                await self._db.remove_user_profile(user_address)
                 continue
 
             prices = await self._client.get_oracle_price(list(user_profile.keys()))

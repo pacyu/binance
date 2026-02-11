@@ -46,7 +46,7 @@ class Analyzer:
                 }
             user_profile = user_profile[user_address]
             await self._db.update_user_profile(user_address, user_profile)
-
+        print(user_address, user_profile)
         hf = self.calculate_hf(user_profile, prices)
         if 0 < hf <= 1.3:
             await self._db.save_or_update_user_health_factor({user_address: hf})
@@ -93,6 +93,9 @@ class Analyzer:
             user_address, v_address = addr.split('|')
             err, vtoken_bal, borrow_bal, exchange_rate = snapshot
 
+            if user_address not in user_profile:
+                user_profile[user_address] = {}
+
             if err != 0:
                 continue
 
@@ -106,9 +109,7 @@ class Analyzer:
             # 这里假设只要有存款就视为抵押，实际上需要判断是否入库 (isListed)，但清算中通常直接取净值
             amount = collateral_underlying - debt_underlying
 
-            if abs(amount) > 1e-9:  # 过滤极小值
-                if user_address not in user_profile:
-                    user_profile[user_address] = {}
+            if abs(amount) > 0:  # 过滤极小值
                 user_profile[user_address][v_address] = amount
                 await self._db.update_user_asset_map(v_address, user_address)
         return user_profile
