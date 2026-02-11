@@ -54,6 +54,11 @@ class MonitorMemPool:
         self._digests_mapping = await self._db.get_all_digests()
         self._pre_onchain_price = await self._client.get_oracle_price(list(self._vtoken_cache.keys()))
 
+        for v_addr, price in self._pre_onchain_price.items():
+            token = self._vtoken_cache[v_addr]
+            decimal = int(token['underlying_decimal'])
+            self._pre_onchain_price[v_addr] = price // (10 ** (18 - decimal))
+
     @staticmethod
     def _process_forward(data: str):
         data_bytes = bytes.fromhex(data)

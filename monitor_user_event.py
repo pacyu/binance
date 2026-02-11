@@ -56,6 +56,10 @@ class MonitorUserEvent:
                 continue
 
             prices = await self._client.get_oracle_price(list(user_profile.keys()))
+            for v_addr, price in prices.items():
+                token = self._vtoken_cache[v_addr]
+                decimal = int(token['underlying_decimal'])
+                prices[v_addr] = price // (10 ** (18 - decimal))
             hf = self.analyzer.calculate_hf(user_profile, prices)
             if hf <= 1.3:
                 await self._db.save_or_update_user_health_factor({user_address: hf})

@@ -259,9 +259,7 @@ class VenusClient:
 
     async def get_oracle_price(self, vtoken_or_list: List[str]) -> Dict[str, int]:
         """
-        获取 vToken 对应底层资产的预言机价格。
-        注意:
-        Venus Oracle 返回的价格公式为: Value_in_USD = (Asset_Amount * Oracle_Price) / 10^{18}
+        获取 vToken 对应底层资产的预言机价格。精度为 36 (wei)
 
         函数签名详细说明:
         :param vtoken_or_list: 列表 ["0x...", "0x..."]
