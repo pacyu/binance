@@ -82,14 +82,6 @@ class DataManager:
                 await self._db.save_or_update_digest_mapping(digest.hex(), item)
 
 
-async def main():
-    latest_block_number = client.get_block_number()
-    start_block_number = 79989731
-    step = 100
-    print("最新区块:", latest_block_number)
-    for i in range(start_block_number, latest_block_number, step):
-        await manager.scan_user_address(i, i + step)
-
 if __name__ == '__main__':
     from web3client import VenusClient
     from redis_client import RedisClient
@@ -99,4 +91,3 @@ if __name__ == '__main__':
     client = VenusClient(config.CHAINSTACK_RPC_URL, config.VENUS_CORE_COMPTROLLER_ADDR)
     manager = DataManager(client, r)
 
-    asyncio.run(main())
