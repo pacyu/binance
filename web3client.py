@@ -67,8 +67,8 @@ class VenusClient:
     def to_checksum_address(self, address: str) -> ChecksumAddress:
         return self._w3.to_checksum_address(address)
 
-    async def get_logs(self, filter_params: FilterParams) -> List[LogReceipt]:
-        return await self._async_w3.eth.get_logs(filter_params)
+    def get_logs(self, filter_params: FilterParams) -> List[LogReceipt]:
+        return self._w3.eth.get_logs(filter_params)
 
     async def get_event(self) -> AsyncContractEvents:
         contract = self._async_w3.eth.contract(abi=abi.event_abi)
@@ -80,8 +80,8 @@ class VenusClient:
     def keccak(self, signature: str) -> bytes:
         return self._w3.keccak(text=signature)
 
-    async def fetch_user_address(self, start_block: int, end_block: int) -> List[str]:
-        logs = await self.get_logs({
+    def fetch_user_address(self, start_block: int, end_block: int) -> List[str]:
+        logs = self.get_logs({
             "fromBlock": start_block,
             "toBlock": end_block,
             "address": self.to_checksum_address(config.VENUS_CORE_COMPTROLLER_ADDR),

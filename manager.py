@@ -8,8 +8,8 @@ class DataManager:
 
     async def scan_user_address(self, start_block, end_block):
         print(f"正在扫描从 {start_block} 到 {end_block} 的链上用户借款日志...")
-        user_address_list = await self._client.fetch_user_address(start_block, end_block)
-        print(end_block)
+        user_address_list = self._client.fetch_user_address(start_block, end_block)
+        print(user_address_list)
         if user_address_list:
             await self._db.save_user_wallets(user_address_list)
 
@@ -82,6 +82,14 @@ class DataManager:
                 await self._db.save_or_update_digest_mapping(digest.hex(), item)
 
 
+async def main():
+    latest_block_number = client.get_block_number()
+    start_block_number = latest_block_number - 365 * 30000
+    step = 100
+    print("最新区块:", latest_block_number)
+    for i in range(start_block_number, latest_block_number, step):
+        await manager.scan_user_address(i, i + step)
+
 if __name__ == '__main__':
     from web3client import VenusClient
     from redis_client import RedisClient
@@ -91,8 +99,4 @@ if __name__ == '__main__':
     client = VenusClient(config.CHAINSTACK_RPC_URL, config.VENUS_CORE_COMPTROLLER_ADDR)
     manager = DataManager(client, r)
 
-    latest_block_number = client.get_block_number()
-    start_block_number = latest_block_number - 365 * 28800
-    step = 100
-    for i in range(start_block_number, latest_block_number, step):
-        asyncio.run(manager.scan_user_address(i, i + step))
+    asyncio.run(main())

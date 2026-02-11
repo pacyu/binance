@@ -5,7 +5,7 @@ import websockets
 from logger import Logger
 from redis_client import RedisClient
 from websockets.exceptions import ConnectionClosedError
-from utils import price_to_wei, get_price_volatility_threshold
+from utils import get_binance_symbols, price_to_wei, get_price_volatility_threshold
 
 
 class MonitorBinance:
@@ -15,7 +15,7 @@ class MonitorBinance:
         self._binance_price = {}
 
     async def listen_binance_price_updates(self):
-        streams = "/".join([f"{t.lower()}usdt@aggTrade" for t in await self._db.get_all_symbols()])
+        streams = "/".join([f"{t.lower()}usdt@aggTrade" for t in get_binance_symbols()])
         while True:
             try:
                 async with websockets.connect(

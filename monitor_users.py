@@ -40,10 +40,10 @@ class MonitorUsers:
         self._vtoken_cache = await self._db.get_markets()
 
     async def _process_users(self, user_address_list, prices):
-        try:
+        # try:
             await self.engine.handle_multi_liquidation(user_address_list, prices)
-        except Exception as e:
-            self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}")
+        # except Exception as e:
+        #     self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}")
 
     async def full_scan(self):
         user_address_list = list(await self._db.get_user_wallets())

@@ -11,9 +11,6 @@ class Analyzer:
     def set_vtoken_cache(self, vtoken_cache):
         self._vtoken_cache = vtoken_cache
 
-    def get_vtoken_cache(self):
-        return self._vtoken_cache
-
     def calculate_hf(self, user_profile: dict, prices: dict) -> float:
         total_collateral = 0
         total_debt = 0
@@ -28,7 +25,7 @@ class Analyzer:
             current_price = price
             value = amount * current_price
             if amount > 0:
-                total_collateral += value * token['cf']
+                total_collateral += value * float(token['cf'])
             else:
                 total_debt += abs(value)
 
@@ -53,6 +50,8 @@ class Analyzer:
         hf = self.calculate_hf(user_profile, prices)
         if 0 < hf <= 1.3:
             await self._db.save_or_update_user_health_factor({user_address: hf})
+        else:
+            await self._db.remove_user_health_factor_by_wallet_address(user_address)
 
         report = {
             "user_address": user_address,
@@ -62,7 +61,7 @@ class Analyzer:
         return report
 
     async def analyze_users(self, user_address_list: list, prices: dict) -> list:
-        user_profiles = await self.get_user_snapshot(user_address_list)
+        user_profiles = await self._db.get_user_profiles(user_address_list)
         risky_reports = []
         for user_address, user_profile in user_profiles.items():
 
@@ -72,6 +71,8 @@ class Analyzer:
             hf = self.calculate_hf(user_profile, prices)
             if 0 < hf <= 1.3:
                 await self._db.save_or_update_user_health_factor({user_address: hf})
+            else:
+                await self._db.remove_user_health_factor_by_wallet_address(user_address)
 
             await self._db.update_user_profile(user_address, user_profile)
 

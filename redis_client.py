@@ -65,6 +65,26 @@ class RedisClient:
         name = f"user_profile:{user_address}"
         return await self._db.hgetall(name)
 
+    async def get_all_user_addresses(self):
+        match = "user_profile:*"
+        cursor = 0
+        keys = []
+        while True:
+            cursor, batch = await self._db.scan(cursor=cursor, match=match, count=200)
+            keys.extend(batch)
+            if cursor == 0:
+                break
+
+        return [key.replace('user_profile:', '') for key in keys]
+
+    async def get_user_profiles(self, user_address_list: list):
+        pipe = await self._db.pipeline()
+        for user_address in user_address_list:
+            name = f"user_profile:{user_address}"
+            await pipe.hgetall(name)
+        profiles = await pipe.execute()
+        return dict(zip(user_address_list, profiles))
+
     async def remove_user_profile(self, user_address: str):
         name = f"user_profile:{user_address}"
         await self._db.delete(name)
@@ -134,7 +154,7 @@ class RedisClient:
         return await self._db.hmget(name, currencies)
 
     async def get_markets(self):
-        match = "currency:address：*"
+        match = "currency:address:*"
         cursor = 0
         keys = []
         while True:

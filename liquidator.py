@@ -215,7 +215,7 @@ class Liquidator:
                     "symbol": token['symbol'],
                     "value": value,
                     "amount": abs(amount),
-                    "underlying_decimal": token['underlying_decimal'],
+                    "underlying_decimal": int(token['underlying_decimal']),
                 })
             elif amount > 0:  # 抵押品
                 collaterals.append({
@@ -225,7 +225,7 @@ class Liquidator:
                     "value": value,
                     "amount": amount,
                     "cf": token['cf'],
-                    "underlying_decimal": token['underlying_decimal'],
+                    "underlying_decimal": int(token['underlying_decimal']),
                 })
 
         # 排序：债务按价值从大到小
