@@ -111,14 +111,14 @@ class MonitorMemPool:
                     report = decoded[1]
                     prices = parse_prices(report)
                     final_price = sorted(prices)[len(prices) // 2]
-                    decimals = digest_config['decimals']
+                    decimals = int(digest_config['decimals'])
                     price = final_price * (10 ** (18 - decimals)) # 将价格放缩为18位精度（wei)
 
                     symbol = digest_config['symbol']
                     vtoken_address = digest_config['v_address']
                     last_price = self._pre_onchain_price[vtoken_address]
                     self._pre_onchain_price[vtoken_address] = price
-                    deviation = price - last_price / price
+                    deviation = 1 - last_price / price
                     self.Log.info(f"🔍 发现代币 {symbol} 价格即将更新! 价格变化: {last_price} -> {price} | 波动偏差: {abs(deviation) * 100:.f}%")
                     await self._check_opportunity(vtoken_address, self._pre_onchain_price, tx_hash)
         except TransactionNotFound:
