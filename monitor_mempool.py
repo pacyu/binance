@@ -171,8 +171,8 @@ class MonitorMemPool:
                 if task["type"] == "oracle_update":
                     await self._handle_oracle_update(task)
 
-            # except Exception as e:
-            #     self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}, 任务: {task}")
+            except Exception as e:
+                self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}, 任务: {task}")
 
             finally:
                 self._task_queue.task_done()
