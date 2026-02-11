@@ -46,7 +46,7 @@ class Analyzer:
                 }
             user_profile = user_profile[user_address]
             await self._db.update_user_profile(user_address, user_profile)
-        print("", user_address, user_profile)
+
         hf = self.calculate_hf(user_profile, prices)
         if 0 < hf <= 1.3:
             await self._db.save_or_update_user_health_factor({user_address: hf})
@@ -67,7 +67,7 @@ class Analyzer:
 
             if not user_profile:
                 continue
-            print(user_address, user_profile)
+
             hf = self.calculate_hf(user_profile, prices)
             if 0 < hf <= 1.3:
                 await self._db.save_or_update_user_health_factor({user_address: hf})

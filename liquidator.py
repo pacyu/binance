@@ -205,6 +205,7 @@ class Liquidator:
             if not token:
                 return {}, {}
 
+            amount = int(amount)
             current_price = prices[v_addr]
             value = abs(amount) * current_price
 

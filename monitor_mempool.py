@@ -105,7 +105,8 @@ class MonitorMemPool:
             if method_id in self._process_func:
                 decoded = self._process_func[method_id](payload)
                 if method_id == '6fadcf72':
-                    decoded = self._process_transmit(decoded[1].hex())
+                    payload = extract_payload(decoded[1].hex())
+                    decoded = self._process_transmit(payload)
 
                 digest = decoded[0][0].hex()
                 if digest in self._digests_mapping:
@@ -122,7 +123,7 @@ class MonitorMemPool:
                     last_price = self._pre_onchain_price[vtoken_address]
                     self._pre_onchain_price[vtoken_address] = price
                     deviation = price - last_price / price
-                    self.Log.info(f"🔍 发现代币 {symbol} 价格即将更新! 交易价格变化: {last_price} -> {price} | 波动偏差: {abs(deviation) * 100:.f}%")
+                    self.Log.info(f"🔍 发现代币 {symbol} 价格即将更新! 价格变化: {last_price} -> {price} | 波动偏差: {abs(deviation) * 100:.f}%")
                     await self._check_opportunity(vtoken_address, self._pre_onchain_price, tx_hash)
         except TransactionNotFound:
             return
@@ -168,8 +169,8 @@ class MonitorMemPool:
                 if task["type"] == "oracle_update":
                     await self._handle_oracle_update(task)
 
-            except Exception as e:
-                self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}, 任务: {task}")
+            # except Exception as e:
+            #     self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}, 任务: {task}")
 
             finally:
                 self._task_queue.task_done()

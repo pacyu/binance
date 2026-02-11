@@ -84,7 +84,7 @@ class DataManager:
 
 async def main():
     latest_block_number = client.get_block_number()
-    start_block_number = latest_block_number - 365 * 30000
+    start_block_number = 76309631
     step = 100
     print("最新区块:", latest_block_number)
     for i in range(start_block_number, latest_block_number, step):
