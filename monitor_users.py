@@ -33,10 +33,11 @@ class MonitorUsers:
         self._execution_lock = asyncio.Lock()
         self.engine.set_execution_lock(self._execution_lock)
 
-    async def _load_vtoken_cache_(self):
+    async def _load_cache_(self):
         self._vtoken_cache = await self._db.get_markets()
         self.analyzer.set_vtoken_cache(self._vtoken_cache)
         self.engine.set_vtoken_cache(self._vtoken_cache)
+        self.engine.set_graph_cache(await self._db.get_all_pairs())
 
     async def _process_users(self, user_address_list, prices):
         try:
@@ -64,7 +65,7 @@ class MonitorUsers:
         await asyncio.gather(*tasks)
 
     async def run(self):
-        await self._load_vtoken_cache_()
+        await self._load_cache_()
 
         self.Log.info(f"全量扫描任务开始，该任务每小时执行一次...")
         await self.full_scan()

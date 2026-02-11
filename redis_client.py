@@ -112,6 +112,21 @@ class RedisClient:
         name = f"pair:{underlying_address}"
         return await self._db.hgetall(name)
 
+    async def get_all_pairs(self):
+        match = "pair:*"
+        cursor = 0
+        keys = []
+        while True:
+            cursor, batch = await self._db.scan(cursor=cursor, match=match, count=200)
+            keys.extend(batch)
+            if cursor == 0:
+                break
+        pipe = await self._db.pipeline()
+        for key in keys:
+            await pipe.hgetall(key)
+        results = await pipe.execute()
+        return {key.replace('pair:', ''): value for key, value in zip(keys, results)}
+
     async def exist_pair(self, underlying_address: str, key: str) -> bool:
         name = f"pair:{underlying_address}"
         return await self._db.hexists(name, key)

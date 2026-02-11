@@ -42,7 +42,7 @@ class MonitorUserEvent:
         self._execution_lock = asyncio.Lock()
         self.engine.set_execution_lock(self._execution_lock)
 
-    async def _load_vtoken_cache_(self):
+    async def _load_cache_(self):
         self._vtoken_cache = await self._db.get_markets()
         self.analyzer.set_vtoken_cache(self._vtoken_cache)
         self.engine.set_vtoken_cache(self._vtoken_cache)
@@ -217,7 +217,7 @@ class MonitorUserEvent:
 
     async def run(self):
         self._event = await self._client.get_event()
-        await self._load_vtoken_cache_()
+        await self._load_cache_()
 
         await asyncio.gather(
             self.listen_user_events(),

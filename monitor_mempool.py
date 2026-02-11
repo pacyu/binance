@@ -44,18 +44,14 @@ class MonitorMemPool:
         self._digests_mapping = {}
 
         self._execution_lock = asyncio.Lock()
-
-        self.analyzer.set_vtoken_cache(self._vtoken_cache)
-        self.engine.set_vtoken_cache(self._vtoken_cache)
         self.engine.set_execution_lock(self._execution_lock)
 
-    async def _load_vtoken_cache_(self):
+    async def _load_cache_(self):
         self._vtoken_cache = await self._db.get_markets()
-
-    async def _load__digests_map_cache_(self):
+        self.analyzer.set_vtoken_cache(self._vtoken_cache)
+        self.engine.set_vtoken_cache(self._vtoken_cache)
+        self.engine.set_graph_cache(await self._db.get_all_pairs())
         self._digests_mapping = await self._db.get_all_digests()
-
-    async def _init_price_(self):
         self._pre_onchain_price = await self._client.get_oracle_price(list(self._vtoken_cache.keys()))
 
     @staticmethod
@@ -169,16 +165,14 @@ class MonitorMemPool:
                 if task["type"] == "oracle_update":
                     await self._handle_oracle_update(task)
 
-            # except Exception as e:
-            #     self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}, 任务: {task}")
+            except Exception as e:
+                self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}, 任务: {task}")
 
             finally:
                 self._task_queue.task_done()
 
     async def run(self):
-        await self._init_price_()
-        await self._load_vtoken_cache_()
-        await self._load__digests_map_cache_()
+        await self._load_cache_()
 
         await asyncio.gather(
             self.listen_mempool(),

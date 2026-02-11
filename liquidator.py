@@ -16,10 +16,11 @@ class Liquidator:
         self._db = db
         self.Log = logger
         self.analyzer = analyzer
-        self.incentive_rate = 1100000000000000000
+        self.incentive_mantissa = config.INCENTIVE_MANTISSA
         self._execution_lock = None
         self._vtoken_cache = None
         self._cooldown_cache = {}
+        self._pair_graph_ = {}
 
     def set_vtoken_cache(self, vtoken_cache):
         self._vtoken_cache = vtoken_cache
@@ -27,29 +28,33 @@ class Liquidator:
     def set_execution_lock(self, lock):
         self._execution_lock = lock
 
+    def set_graph_cache(self, graph_cache):
+        self._pair_graph_ = graph_cache
+
     async def _handle_helper(self, user_address: str, user_profile: dict, assets: dict, prices: dict,
                              health_factor: float, oracle_tx_hash: str = None):
         self.Log.info(f"正在处理用户: {user_address} | 健康度: {health_factor} ")
         error, liquidity, shortfall = assets[user_address]
-
-        if shortfall > 0:
-            liquidation_report = await self.is_liquidation(user_address, user_profile, prices, self.incentive_rate)
-            if liquidation_report['is_profitable']:
-                status = await self.execute_liquidation(user_address, liquidation_report, oracle_tx_hash)
-                self.Log.info(f"用户: {user_address}| 账户流动性:{liquidity} | 账户缺口: {shortfall} | 清算结果状态: {status}")
-            else:
-                self.Log.info(f"用户: {user_address} 不值得清算! | 账户流动性:{liquidity} | 账户缺口: {shortfall}")
+        liquidation_report = await self.is_liquidation(user_address, user_profile, prices)
+        if liquidation_report['is_profitable']:
+            status = await self.execute_liquidation(user_address, liquidation_report, oracle_tx_hash)
+            self.Log.info(f"用户: {user_address}| 账户流动性:{liquidity} | 账户缺口: {shortfall} | 清算结果状态: {status}")
         else:
-            self.Log.info(f"用户无法被清算! | 账户流动性:{liquidity} | 账户缺口: {shortfall}")
+            self.Log.info(f"用户: {user_address} 不值得清算! | 账户流动性:{liquidity} | 账户缺口: {shortfall}")
 
     async def handle_multi_liquidation(self, user_address_list, prices):
         risky_reports = await self.analyzer.analyze_users(user_address_list, prices)
         assets = await self._client.get_user_liquidity(user_address_list)
+        tasks = []
         for risky_report in risky_reports:
             user_address = risky_report['user_address']
             hf = risky_report['health_factor']
             user_profile = risky_report['user_profile']
-            await self._handle_helper(user_address, user_profile, assets, prices, hf)
+            error, liquidity, shortfall = assets[user_address]
+
+            if shortfall > 0:
+                tasks.append(self._handle_helper(user_address, user_profile, assets, prices, hf))
+        await asyncio.gather(*tasks)
 
     async def handle_liquidation(self, report, oracle_tx_hash: str = None):
         user_address = report['user_address']
@@ -69,7 +74,10 @@ class Liquidator:
         prices = await self._client.get_oracle_price(list(user_profile[user_address].keys()))
         hf = self.analyzer.calculate_hf(user_profile[user_address], prices)
         assets = await self._client.get_user_liquidity([user_address])
-        await self._handle_helper(user_address, user_profile[user_address], assets, prices, hf, oracle_tx_hash)
+        error, liquidity, shortfall = assets[user_address]
+
+        if shortfall > 0:
+            await self._handle_helper(user_address, user_profile[user_address], assets, prices, hf, oracle_tx_hash)
 
     async def get_slippage(self, pair_addr, v_address, amount):
         reserves, token0, token1 = await self._client.get_reserves(pair_addr)
@@ -84,11 +92,11 @@ class Liquidator:
         return slippage
 
     @staticmethod
-    def calc_received_collateral(repay_amount_wei, best_debt, best_collateral, prices, incentive_rate):
+    def calc_received_collateral(repay_amount_wei, best_debt, best_collateral, prices, incentive_mantissa):
         price_debt = prices[best_debt['v_addr']]
         price_collateral = prices[best_collateral['v_addr']]
 
-        numerator = repay_amount_wei * price_debt * incentive_rate
+        numerator = repay_amount_wei * price_debt * incentive_mantissa
         denominator = price_collateral * 10**18
         received_collateral_wei = numerator // denominator
         return int(received_collateral_wei)
@@ -111,7 +119,7 @@ class Liquidator:
 
         best_path = []
         max_amount = 0
-        pairs = await self._db.get_pairs(collateral_underlying_address)
+        pairs = self._pair_graph_[collateral_underlying_address]
         if config.USDT_UNDER_ADDRESS in pairs:
             pair_addr = pairs[config.USDT_UNDER_ADDRESS]
             if pair_addr != debt_wbnb_pair_address:
@@ -126,8 +134,8 @@ class Liquidator:
                     pass
         for node, pair_address in pairs.items():
             if pair_address != debt_wbnb_pair_address:
-                if await self._db.exist_pair(node, config.USDT_UNDER_ADDRESS):
-                    if await self._db.get_pair(node, config.USDT_UNDER_ADDRESS) != debt_wbnb_pair_address:
+                if config.USDT_UNDER_ADDRESS in self._pair_graph_[node]:
+                    if self._pair_graph_[node][config.USDT_UNDER_ADDRESS] != debt_wbnb_pair_address:
                         path = [self._client.to_checksum_address(collateral_underlying_address),
                                 self._client.to_checksum_address(node),
                                 self._client.to_checksum_address(config.USDT_UNDER_ADDRESS)]
@@ -159,7 +167,7 @@ class Liquidator:
         """
         best_path = []
         min_pay_redeem_amount = float('inf')
-        pairs = await self._db.get_pairs(collateral_underlying_address)
+        pairs = self._pair_graph_[collateral_underlying_address]
 
         if debt_underlying_address in pairs:
             pair_addr = pairs[debt_underlying_address]
@@ -176,8 +184,8 @@ class Liquidator:
 
         for node, pair_address in pairs.items():
             if pair_address != debt_wbnb_pair_address:
-                if await self._db.exist_pair(node, debt_underlying_address):
-                    if await self._db.get_pair(node, debt_underlying_address) != debt_wbnb_pair_address:
+                if debt_underlying_address in self._pair_graph_[node]:
+                    if self._pair_graph_[node][debt_underlying_address] != debt_wbnb_pair_address:
                         path = [self._client.to_checksum_address(collateral_underlying_address),
                                 self._client.to_checksum_address(node),
                                 self._client.to_checksum_address(debt_underlying_address)]
@@ -238,23 +246,23 @@ class Liquidator:
         return best_debt, best_collateral
 
     @staticmethod
-    def get_optimal_repay(best_debt, best_collateral, incentive_rate):
+    def get_optimal_repay(best_debt, best_collateral, incentive_mantissa):
         # 1. 协议限制：只能还 50%
         debt_amount_limited = int(best_debt['amount'] * config.CLOSE_FACTOR)
 
         # 2. 抵押品限制：不能超过抵押品能赔付的上限 (假设奖励 10%)
-        collateral_amount_limited = int(best_collateral['amount'] * (incentive_rate // 10**18))
+        collateral_amount_limited = int(best_collateral['amount'] * (incentive_mantissa // 10**18))
 
         repay_amount = min(debt_amount_limited, collateral_amount_limited)
 
         return repay_amount
 
-    async def is_liquidation(self, user_addr: str, user_profile: dict, prices: dict, incentive_rate) -> dict:
+    async def is_liquidation(self, user_addr: str, user_profile: dict, prices: dict) -> dict:
         best_debt, best_collateral = self.find_best_liquidation_asset(user_profile, prices)
         if not best_debt or not best_collateral:
             return {"is_profitable": False, "best_debt": {}, "best_collateral": {}, "repay_amount": 0}
 
-        repay_amount_wei = self.get_optimal_repay(best_debt, best_collateral, incentive_rate)
+        repay_amount_wei = self.get_optimal_repay(best_debt, best_collateral, self.incentive_mantissa)
         repay_usd = repay_amount_wei * prices[best_debt['v_addr']] / (10 ** (18 + best_debt['underlying_decimal']))
 
         min_profit_wei = usd_to_wei(config.MIN_PROFIT_TOLERANCE,
@@ -262,11 +270,9 @@ class Liquidator:
                                     18)
 
         if best_debt['underlying_address'] != config.WBNB_UNDER_ADDRESS:
-            pair_address = await self._db.get_pair(best_debt['underlying_address'],
-                                                   config.WBNB_UNDER_ADDRESS)
+            pair_address = self._pair_graph_[best_debt['underlying_address']][config.WBNB_UNDER_ADDRESS]
         else:
-            pair_address = await self._db.get_pair(best_debt['underlying_address'],
-                                                   config.USDT_UNDER_ADDRESS)
+            pair_address = self._pair_graph_[best_debt['underlying_address']][config.USDT_UNDER_ADDRESS]
 
         # 1. 预估 gas 成本
         gas_price_wei = config.GAS_PRICE
@@ -277,7 +283,7 @@ class Liquidator:
 
         # 2. 我能得到的总抵押品数量
         received_collateral_amount_wei = self.calc_received_collateral(
-            repay_amount_wei, best_debt, best_collateral, prices, incentive_rate)
+            repay_amount_wei, best_debt, best_collateral, prices, self.incentive_mantissa)
 
         # 3. 计算还掉闪电贷的最优路径与债务 + 滑点 + swap手续费（0.25%）成本
         best_path, pay_collateral_amount_wei = await self.calc_repay_flash_loan_best_path(
