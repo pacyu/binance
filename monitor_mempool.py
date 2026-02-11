@@ -24,7 +24,7 @@ class MonitorMemPool:
         bloxroute_auth_header = os.getenv('BLOXROUTE_AUTH_HEADER')
 
         self.Log = Logger('mempool.log')()
-        self._client = VenusClient(config.QUICKNODE_RPC_URL,
+        self._client = VenusClient(config.CHAINSTACK_RPC_URL,
                                    config.VENUS_CORE_COMPTROLLER_ADDR,
                                    private_key,
                                    bloxroute_api_key,
@@ -83,7 +83,7 @@ class MonitorMemPool:
             risky_report = await self.analyzer.analyze_user(u_addr, prices)
             if risky_report['is_liquidatable']:
                 self.Log.info(f"⚠️ 用户 {u_addr} 资产进入警戒线，立即触发清算!")
-                await self.engine.handle_liquidation(risky_report, oracle_tx_hash)
+                await self.engine.handle_liquidation(risky_report, prices, oracle_tx_hash)
 
     async def _check_opportunity(self, vtoken_addr, prices, oracle_tx_hash: str = None):
         user_address_list = list(await self._db.get_holder_by_currency(vtoken_addr))

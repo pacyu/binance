@@ -56,7 +56,7 @@ class Liquidator:
                 tasks.append(self._handle_helper(user_address, user_profile, assets, prices, hf))
         await asyncio.gather(*tasks)
 
-    async def handle_liquidation(self, report, oracle_tx_hash: str = None):
+    async def handle_liquidation(self, report, prices, oracle_tx_hash: str = None):
         user_address = report['user_address']
 
         if await self._db.should_skip(user_address):
@@ -71,7 +71,6 @@ class Liquidator:
             await self._db.remove_user_profile(f"user_profile:{user_address}")
             return
 
-        prices = await self._client.get_oracle_price(list(user_profile[user_address].keys()))
         hf = self.analyzer.calculate_hf(user_profile[user_address], prices)
         assets = await self._client.get_user_liquidity([user_address])
         error, liquidity, shortfall = assets[user_address]
