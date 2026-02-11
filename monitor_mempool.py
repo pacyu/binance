@@ -120,7 +120,7 @@ class MonitorMemPool:
                     last_price = self._pre_onchain_price[vtoken_address]
                     self._pre_onchain_price[vtoken_address] = price
                     deviation = 1 - last_price / price
-                    self.Log.info(f"🔍 发现代币 {symbol} 价格即将更新! 价格变化: {last_price} -> {price} | 波动偏差: {abs(deviation) * 100:.f}%")
+                    self.Log.info(f"🔍 发现代币 {symbol} 价格即将更新! 价格变化: {last_price} -> {price} | 波动偏差: {abs(deviation) * 100:.6f}%")
                     await self._check_opportunity(vtoken_address, self._pre_onchain_price, tx_hash)
         except TransactionNotFound:
             return
