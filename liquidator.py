@@ -251,7 +251,7 @@ class Liquidator:
         debt_amount_limited = int(best_debt['amount'] * config.CLOSE_FACTOR)
 
         # 2. 抵押品限制：不能超过抵押品能赔付的上限 (假设奖励 10%)
-        collateral_amount_limited = int(best_collateral['amount'] * (incentive_mantissa // 10**18))
+        collateral_amount_limited = int(best_collateral['amount'] // (incentive_mantissa // 10**18))
 
         repay_amount = min(debt_amount_limited, collateral_amount_limited)
 

@@ -33,7 +33,6 @@ class MonitorUserEvent:
 
         self._task_queue = asyncio.PriorityQueue(maxsize=1000)
 
-        self._pending_users = set()
         self._event = None
 
         self._prior_counter = 0
@@ -68,8 +67,6 @@ class MonitorUserEvent:
     async def _handle_user_event(self, task):
         user_address = task["address"]
         await self._process_and_analyze(user_address)
-        if user_address in self._pending_users:
-            self._pending_users.remove(user_address)
 
     def _process_events_log(self, log):
         vtoken_addr = log['address']
@@ -173,11 +170,6 @@ class MonitorUserEvent:
                                 if not process_result:
                                     continue
                                 prior, address = process_result
-
-                                if address in self._pending_users:
-                                    continue
-
-                                self._pending_users.add(address.lower())
 
                                 try:
                                     await self._task_queue.put((prior, self._prior_counter, {

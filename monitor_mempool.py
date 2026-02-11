@@ -105,6 +105,7 @@ class MonitorMemPool:
                     decoded = self._process_transmit(payload)
 
                 digest = decoded[0][0].hex()
+                self.Log.info(f"{tx['to']} -> {digest}")
                 if digest in self._digests_mapping:
                     digest_config = self._digests_mapping[digest]
                     # 解析价格
@@ -165,8 +166,8 @@ class MonitorMemPool:
                 if task["type"] == "oracle_update":
                     await self._handle_oracle_update(task)
 
-            except Exception as e:
-                self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}, 任务: {task}")
+            # except Exception as e:
+            #     self.Log.error(f"发生异常: {e}, 异常类型: {type(e)}, 任务: {task}")
 
             finally:
                 self._task_queue.task_done()
