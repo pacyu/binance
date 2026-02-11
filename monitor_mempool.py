@@ -105,7 +105,7 @@ class MonitorMemPool:
             if method_id in self._process_func:
                 decoded = self._process_func[method_id](payload)
                 if method_id == '6fadcf72':
-                    decoded = self._process_transmit(decoded[1])
+                    decoded = self._process_transmit(decoded[1].hex())
 
                 digest = decoded[0][0].hex()
                 if digest in self._digests_mapping:

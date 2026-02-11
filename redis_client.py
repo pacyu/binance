@@ -74,7 +74,6 @@ class RedisClient:
             keys.extend(batch)
             if cursor == 0:
                 break
-
         return [key.replace('user_profile:', '') for key in keys]
 
     async def get_user_profiles(self, user_address_list: list):
@@ -88,6 +87,10 @@ class RedisClient:
     async def remove_user_profile(self, user_address: str):
         name = f"user_profile:{user_address}"
         await self._db.delete(name)
+
+    async def delete_asset_from_user_profile(self, user_address: str, asset_address: str):
+        name = f"user_profile:{user_address}"
+        await self._db.hdel(name, asset_address)
 
     async def update_exchange_rate(self, v_address: str, value: int):
         name = f"rate:{v_address}"
