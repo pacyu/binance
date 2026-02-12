@@ -35,9 +35,9 @@ class MonitorBinance:
                             symbol = 'btcb'
 
                         vtoken_addr = await self._db.get_v_address_by_symbol(symbol)
-                        token_config = self._vtoken_cache[vtoken_addr]
+
                         last_price = self._binance_price.get(vtoken_addr, 0)
-                        current_price = price_to_wei(data['p'], int(token_config['underlying_decimal']))
+                        current_price = price_to_wei(data['p'])
                         fluctuation = 1 - last_price / current_price
 
                         # 减少日志量
