@@ -24,7 +24,7 @@ class MonitorMemPool:
         bloxroute_auth_header = os.getenv('BLOXROUTE_AUTH_HEADER')
 
         self.Log = Logger('mempool.log')()
-        self._client = VenusClient(config.CHAINSTACK_RPC_URL_GITHUB,
+        self._client = VenusClient(config.QUICKNODE_RPC_URL,
                                    config.VENUS_CORE_COMPTROLLER_ADDR,
                                    private_key,
                                    bloxroute_api_key,
@@ -34,7 +34,7 @@ class MonitorMemPool:
         self.engine = Liquidator(self._client, self._db, self.analyzer, self.Log)
 
         self._task_queue = asyncio.Queue(maxsize=1000)
-        self._semaphore = asyncio.Semaphore(60)
+        self._semaphore = asyncio.Semaphore(200)
 
         self._prior_counter = 0
 
@@ -113,7 +113,8 @@ class MonitorMemPool:
                     prices = parse_prices(report)
                     final_price = sorted(prices)[len(prices) // 2]
                     decimals = int(digest_config['decimals'])
-                    price = final_price * (10 ** (28 - decimals))
+                    underlying_decimal = int(digest_config['underlying_decimal'])
+                    price = final_price * (10 ** (36 - decimals - underlying_decimal))
 
                     symbol = digest_config['symbol']
                     vtoken_address = digest_config['v_address']
@@ -138,7 +139,7 @@ class MonitorMemPool:
                         config.BSC_WSS_URI, ping_timeout=120, ping_interval=5, close_timeout=5) as ws:
                     await ws.send(json.dumps(subscribe_msg))
                     msg = json.loads(await ws.recv())
-                    self.Log.info(f"成功订阅 Mempool, SubID: {msg["result"]}")
+                    self.Log.info(f"成功订阅 Mempool - newPendingTransactions, SubID: {msg["result"]}")
                     async for message in ws:
                         try:
                             data = json.loads(message)

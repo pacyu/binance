@@ -151,6 +151,14 @@ class RedisClient:
         name = "currency:map:symbol:address"
         await self._db.hset(name, mapping=item)
 
+    async def get_currency_by_symbol(self, symbol: str) -> dict:
+        name = f"currency:symbol:{symbol}"
+        return await self._db.hgetall(name)
+
+    async def get_symbol_by_address(self, address: str) -> dict:
+        name = f"currency:address:{address}"
+        return await self._db.hgetall(name)
+
     async def get_v_address_by_symbol(self, symbol: str):
         name = "currency:map:symbol:address"
         return await self._db.hget(name, symbol)

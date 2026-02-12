@@ -58,6 +58,7 @@ class DataManager:
                 "type": "function"
             }
         ]
+
         for proxy_addr in list(config.PROXY_ADDRESSES):
             proxy_contract = await self._client.get_async_contract(proxy_addr, proxy_abi)
             decimals = await proxy_contract.functions.decimals().call()
@@ -69,14 +70,15 @@ class DataManager:
 
             symbol = desc.split(' / ')[0].lower()
 
-            v_address = await self._db.get_v_address_by_symbol(symbol)
-            if v_address:
+            token_config = await self._db.get_currency_by_symbol(symbol)
+            if token_config:
                 item = {
                     "aggregator_address": agg_addr,
                     "proxy_address": proxy_addr,
                     "symbol": symbol,
-                    "v_address": v_address,
-                    "decimals": decimals
+                    "v_address": token_config['address'],
+                    "decimals": decimals,
+                    "underlying_decimal": token_config['underlying_decimal'],
                 }
                 print(f"✅ Digest: {digest.hex()} -> {desc} -> proxy_addr: {proxy_addr} -> Aggregator: {agg_addr}")
                 await self._db.save_or_update_digest_mapping(digest.hex(), item)
@@ -88,6 +90,6 @@ if __name__ == '__main__':
     import asyncio
 
     r = RedisClient()
-    client = VenusClient(config.CHAINSTACK_RPC_URL, config.VENUS_CORE_COMPTROLLER_ADDR)
+    client = VenusClient(config.ALCHEMY_BSC_RPC_URL, config.VENUS_CORE_COMPTROLLER_ADDR)
     manager = DataManager(client, r)
-
+    asyncio.run(manager.update_oracle_sources())
