@@ -18,7 +18,7 @@ class MonitorUsers:
         bloxroute_auth_header = os.getenv('BLOXROUTE_AUTH_HEADER')
 
         self._db = RedisClient()
-        self._client = VenusClient(config.CHAINSTACK_RPC_URL,
+        self._client = VenusClient(config.CHAINSTACK_RPC_URL_GITHUB,
                                    config.VENUS_CORE_COMPTROLLER_ADDR,
                                    private_key,
                                    bloxroute_api_key,
@@ -54,10 +54,6 @@ class MonitorUsers:
             return
 
         prices = await self._client.get_oracle_price(list(self._vtoken_cache.keys()))
-        for v_addr, price in prices.items():
-            token = self._vtoken_cache[v_addr]
-            decimal = int(token['underlying_decimal'])
-            prices[v_addr] = price // (10 ** (18 - decimal))
 
         batch_size = 80
 

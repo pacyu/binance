@@ -38,7 +38,8 @@ class Liquidator:
         liquidation_report = await self.is_liquidation(user_address, user_profile, prices)
         if liquidation_report['is_profitable']:
             status = await self.execute_liquidation(user_address, liquidation_report, oracle_tx_hash)
-            self.Log.info(f"用户: {user_address}| 账户流动性:{liquidity} | 账户缺口: {shortfall} | 清算结果状态: {status}")
+            self.Log.info(
+                f"用户: {user_address}| 账户流动性:{liquidity} | 账户缺口: {shortfall} | 清算结果状态: {status}")
         else:
             self.Log.info(f"用户: {user_address} 不值得清算! | 账户流动性:{liquidity} | 账户缺口: {shortfall}")
 
@@ -96,14 +97,14 @@ class Liquidator:
         price_collateral = prices[best_collateral['v_addr']]
 
         numerator = repay_amount_wei * price_debt * incentive_mantissa
-        denominator = price_collateral * 10**18
+        denominator = price_collateral * config.WAD
         received_collateral_wei = numerator // denominator
         return int(received_collateral_wei)
 
     async def calc_transform_collateral_to_usdt_best_path(self,
-                                                     debt_wbnb_pair_address: str,
-                                                     collateral_underlying_address: str,
-                                                     collateral_amount: int) -> Tuple:
+                                                          debt_wbnb_pair_address: str,
+                                                          collateral_underlying_address: str,
+                                                          collateral_amount: int) -> Tuple:
         """
 
         Args:
@@ -232,7 +233,7 @@ class Liquidator:
                     "symbol": token['symbol'],
                     "value": value,
                     "amount": amount,
-                    "cf": token['cf'],
+                    "cf": float(token['cf']),
                     "underlying_decimal": int(token['underlying_decimal']),
                 })
 
@@ -245,40 +246,48 @@ class Liquidator:
         return best_debt, best_collateral
 
     @staticmethod
-    def get_optimal_repay(best_debt, best_collateral, incentive_mantissa):
+    def get_optimal_repay_amount(best_debt, best_collateral, prices, incentive_mantissa):
+        debt_price = prices[best_debt['v_addr']]
+
         # 1. 协议限制：只能还 50%
-        debt_amount_limited = int(best_debt['amount'] * config.CLOSE_FACTOR)
+        debt_value_limited = (best_debt['value'] * config.CLOSE_FACTOR) // config.WAD
 
-        # 2. 抵押品限制：不能超过抵押品能赔付的上限 (假设奖励 10%)
-        collateral_amount_limited = int(best_collateral['amount'] // (incentive_mantissa // 10**18))
+        # 2. 抵押品限制：不能超过抵押品能赔付的上限
+        collateral_value_limited = (best_collateral['value'] * config.WAD) // incentive_mantissa
 
-        repay_amount = min(debt_amount_limited, collateral_amount_limited)
-
-        return repay_amount
+        repay_value = min(debt_value_limited, collateral_value_limited)
+        return repay_value // debt_price
 
     async def is_liquidation(self, user_addr: str, user_profile: dict, prices: dict) -> dict:
         best_debt, best_collateral = self.find_best_liquidation_asset(user_profile, prices)
+
         if not best_debt or not best_collateral:
             return {"is_profitable": False, "best_debt": {}, "best_collateral": {}, "repay_amount": 0}
 
-        repay_amount_wei = self.get_optimal_repay(best_debt, best_collateral, self.incentive_mantissa)
-        repay_usd = repay_amount_wei * prices[best_debt['v_addr']] / (10 ** (18 + best_debt['underlying_decimal']))
+        repay_amount_wei = self.get_optimal_repay_amount(best_debt, best_collateral, prices, self.incentive_mantissa)
 
+        numerator = repay_amount_wei * prices[best_debt['v_addr']]
+        denominator = 10 ** 36
+        repay_usd = numerator / denominator
+
+        debt_underlying_address = best_debt['underlying_address']
+        collateral_underlying_address = best_collateral['underlying_address']
+
+        price_collateral = prices[best_collateral['v_addr']]
         min_profit_wei = usd_to_wei(config.MIN_PROFIT_TOLERANCE,
-                                    prices[config.USDT_ADDRESS],
+                                    price_collateral,
                                     18)
 
-        if best_debt['underlying_address'] != config.WBNB_UNDER_ADDRESS:
-            pair_address = self._pair_graph_[best_debt['underlying_address']][config.WBNB_UNDER_ADDRESS]
+        if debt_underlying_address != config.WBNB_UNDER_ADDRESS:
+            pair_address = self._pair_graph_[debt_underlying_address][config.WBNB_UNDER_ADDRESS]
         else:
-            pair_address = self._pair_graph_[best_debt['underlying_address']][config.USDT_UNDER_ADDRESS]
+            pair_address = self._pair_graph_[debt_underlying_address][config.USDT_UNDER_ADDRESS]
 
         # 1. 预估 gas 成本
         gas_price_wei = config.GAS_PRICE
         estimated_gas = 1000000  # 清算交易通常消耗较多 gas
-        gas_cost_bnb = (gas_price_wei * estimated_gas) / 1e18
         bnb_price = prices.get(config.BNB_ADDRESS, config.BNB_PRICE_DEFAULT)
-        gas_cost_usd = gas_cost_bnb * bnb_price / 1e18
+        gas_cost_usd = (gas_price_wei * estimated_gas * bnb_price) / 10 ** 36
 
         # 2. 我能得到的总抵押品数量
         received_collateral_amount_wei = self.calc_received_collateral(
@@ -287,8 +296,8 @@ class Liquidator:
         # 3. 计算还掉闪电贷的最优路径与债务 + 滑点 + swap手续费（0.25%）成本
         best_path, pay_collateral_amount_wei = await self.calc_repay_flash_loan_best_path(
             pair_address,
-            best_collateral['underlying_address'],
-            best_debt['underlying_address'],
+            collateral_underlying_address,
+            debt_underlying_address,
             repay_amount_wei)
 
         # 4. 剩余抵押品数量 = 总抵押品数量 - 用于支付偿还闪电贷的抵押品数量
@@ -297,36 +306,37 @@ class Liquidator:
             return {"is_profitable": False, "best_debt": {}, "best_collateral": {}, "repay_amount": 0}
 
         # 5. 计算将剩余的抵押品换为 USDT 这样的稳定币的最优路径，以及换成 USDT 后，我最多能得到多少 USDT
-        path, gross_profit_amount = await self.calc_transform_collateral_to_usdt_best_path(
-            pair_address,
-            best_collateral['underlying_address'],
-            rest_collateral_amount_wei)
+        # path, gross_profit_amount = await self.calc_transform_collateral_to_usdt_best_path(
+        #     pair_address,
+        #     collateral_underlying_address,
+        #     rest_collateral_amount_wei)
 
         # 6. 毛利润
-        gross_profit_usd = (gross_profit_amount * prices[config.USDT_ADDRESS]) / 10 ** 36
+        gross_profit_usd = (rest_collateral_amount_wei * price_collateral) / 10 ** 36
 
         # 7. 净利润
         net_profit = gross_profit_usd - gas_cost_usd
 
         self.Log.info(f"用户 {user_addr} | 负债代币: {best_debt['symbol']} | 抵押代币: {best_collateral['symbol']}")
         self.Log.info(f"用户资产: {user_profile}")
-        self.Log.info(f"代偿数量: {repay_amount_wei} | 负债人负债代币总数量: {best_debt['amount']} | 价格: {prices[best_debt['v_addr']]}")
+        self.Log.info(
+            f"代偿数量: {repay_amount_wei} | 负债人负债代币总数量: {best_debt['amount']} | 价格: {prices[best_debt['v_addr']]}")
         self.Log.info(f"能得到的总抵押品数量: {received_collateral_amount_wei}")
         self.Log.info(f"支付抵押品数量: {pay_collateral_amount_wei}")
         self.Log.info(f"剩余抵押品数量: {rest_collateral_amount_wei}")
-        self.Log.info(f"将剩余抵押品换为 USDT 能得到的数量: {gross_profit_amount}")
+        # self.Log.info(f"将剩余抵押品换为 USDT 能得到的数量: {gross_profit_amount}")
 
         if net_profit < config.MIN_PROFIT_TOLERANCE:
             await self._db.mark_as_non_liquidable(f"liquidator:skip:{user_addr}",
                                                   config.COOLDOWN_TTL_HOUR,
                                                   f"low_profit: {net_profit} USD")
         else:
-            self.Log.info(f"--- ⚖️ 用户 {user_addr} 清算决策报告 ---\n"
-                          f"🔹 待清算金额:  ${repay_usd} USD\n"
-                          f"💰 理论毛利:    ${gross_profit_usd} USD\n"
-                          f"⛽ Gas 成本:   ${gas_cost_usd} USD (约 {gas_cost_bnb:.8f} BNB)\n"
-                          f"💴 预计收益:    ${net_profit} USD\n"
-                          f"----------------------")
+            self.Log.info(f"--- ⚖️ 用户 {user_addr} 清算决策报告 ---")
+            self.Log.info(f"🔹 待清算金额:  ${repay_usd} USD")
+            self.Log.info(f"💰 理论毛利:    ${gross_profit_usd} USD")
+            self.Log.info(f"⛽ Gas 成本:   ${gas_cost_usd} USD")
+            self.Log.info(f"💴 预计收益:    ${net_profit} USD")
+            self.Log.info(f"----------------------")
 
         liquidation_report = {
             "is_profitable": net_profit >= config.MIN_PROFIT_TOLERANCE,  # 利润大于 1 刀
@@ -341,8 +351,7 @@ class Liquidator:
         }
         return liquidation_report
 
-    async def execute_liquidation(self, user_address: str, liquidation_report: dict,
-                                  oracle_tx_hash: str = None) -> bool:
+    async def execute_liquidation(self, user_address: str, liquidation_report: dict, oracle_tx_hash: str = None) -> bool:
         pair_address = liquidation_report['pair_address']
         repay_amount_wei = liquidation_report['repay_amount']
         path = liquidation_report['best_path']
@@ -382,7 +391,7 @@ class Liquidator:
                 debt['underlying_address'],
                 collateral['underlying_address'],
             )
-            if net_profit > 50:
+            if net_profit > 500:
                 if oracle_tx_hash:
                     await self._client.send_bundle_to_bloxroute(oracle_tx_hash, signed_tx.rawTransaction.hex())
                 else:

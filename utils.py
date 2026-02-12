@@ -69,9 +69,9 @@ def usd_to_wei(optimal_usd, oracle_price_mantissa, token_decimals) -> int:
 
     return repay_amount_wei
 
-def price_to_wei(price_str: str) -> int:
+def price_to_wei(price_str: str, decimals: int) -> int:
     price_decimal = Decimal(price_str)
-    return int(price_decimal * Decimal(10 ** 18))
+    return int(price_decimal * Decimal(10 ** (36 - decimals)))
 
 def calc_slippage(amount, r0, r1):
     price_before = r1 / r0

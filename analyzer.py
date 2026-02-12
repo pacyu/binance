@@ -14,16 +14,16 @@ class Analyzer:
     def calculate_hf(self, user_profile: dict, prices: dict) -> float:
         total_collateral = 0
         total_debt = 0
-
+        wad = 10 ** 18
         for v_addr, amount in user_profile.items():
             price = prices.get(v_addr)
             if not price:
                 break
 
-            amount = int(amount)
             token = self._vtoken_cache[v_addr]
+            amount = int(amount)
             current_price = price
-            value = amount * current_price
+            value = amount * current_price // wad
             if amount > 0:
                 total_collateral += value * float(token['cf'])
             else:
@@ -91,7 +91,8 @@ class Analyzer:
         wad = 10 ** 18
         for addr, snapshot in results.items():
             user_address, v_address = addr.split('|')
-            err, vtoken_bal, borrow_bal, exchange_rate = snapshot
+
+            err, v_balance, borrow_balance, exchange_rate = snapshot
 
             if user_address not in user_profile:
                 user_profile[user_address] = {}
@@ -100,16 +101,15 @@ class Analyzer:
                 continue
 
             # 计算底层资产抵押数量 = vToken余额 * 兑换率
-            collateral_underlying = (vtoken_bal * exchange_rate) // wad
+            collateral_balance = (v_balance * exchange_rate) // wad
 
-            # 借款余额已经是底层资产单位了
-            debt_underlying = borrow_bal
+            collateral_underlying = collateral_balance
+            debt_underlying = borrow_balance
 
             # 计算净头寸 (带符号)
-            # 这里假设只要有存款就视为抵押，实际上需要判断是否入库 (isListed)，但清算中通常直接取净值
             amount = collateral_underlying - debt_underlying
 
-            if abs(amount) > 0:  # 过滤极小值
+            if abs(amount) > 0:
                 user_profile[user_address][v_address] = amount
                 await self._db.update_user_asset_map(v_address, user_address)
         return user_profile

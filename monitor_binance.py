@@ -12,7 +12,11 @@ class MonitorBinance:
     def __init__(self):
         self._db = RedisClient()
         self.Log = Logger('price_update.log')()
+        self._vtoken_cache = {}
         self._binance_price = {}
+
+    async def _load_cache_(self):
+        self._vtoken_cache = await self._db.get_markets()
 
     async def listen_binance_price_updates(self):
         streams = "/".join([f"{t.lower()}usdt@aggTrade" for t in get_binance_symbols()])
@@ -31,9 +35,9 @@ class MonitorBinance:
                             symbol = 'btcb'
 
                         vtoken_addr = await self._db.get_v_address_by_symbol(symbol)
-
+                        token_config = self._vtoken_cache[vtoken_addr]
                         last_price = self._binance_price.get(vtoken_addr, 0)
-                        current_price = price_to_wei(data['p'])
+                        current_price = price_to_wei(data['p'], int(token_config['underlying_decimal']))
                         fluctuation = 1 - last_price / current_price
 
                         # 减少日志量
@@ -72,10 +76,14 @@ class MonitorBinance:
                 else:
                     config.RETRY_DELAY_PRICE = 0
 
-    def run(self):
-        asyncio.run(self.listen_binance_price_updates())
+    async def main(self):
+        await self._load_cache_()
+
+
+    def __call__(self):
+        asyncio.run(self.main())
 
 
 if __name__ == "__main__":
     monitor = MonitorBinance()
-    monitor.run()
+    monitor()

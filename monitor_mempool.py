@@ -24,7 +24,7 @@ class MonitorMemPool:
         bloxroute_auth_header = os.getenv('BLOXROUTE_AUTH_HEADER')
 
         self.Log = Logger('mempool.log')()
-        self._client = VenusClient(config.CHAINSTACK_RPC_URL,
+        self._client = VenusClient(config.CHAINSTACK_RPC_URL_GITHUB,
                                    config.VENUS_CORE_COMPTROLLER_ADDR,
                                    private_key,
                                    bloxroute_api_key,
@@ -53,11 +53,6 @@ class MonitorMemPool:
         self.engine.set_graph_cache(await self._db.get_all_pairs())
         self._digests_mapping = await self._db.get_all_digests()
         self._pre_onchain_price = await self._client.get_oracle_price(list(self._vtoken_cache.keys()))
-
-        for v_addr, price in self._pre_onchain_price.items():
-            token = self._vtoken_cache[v_addr]
-            decimal = int(token['underlying_decimal'])
-            self._pre_onchain_price[v_addr] = price // (10 ** (18 - decimal))
 
     @staticmethod
     def _process_forward(data: str):

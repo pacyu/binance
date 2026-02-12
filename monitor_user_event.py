@@ -22,7 +22,7 @@ class MonitorUserEvent:
         bloxroute_auth_header = os.getenv('BLOXROUTE_AUTH_HEADER')
 
         self.Log = Logger('user_event.log')()
-        self._client = VenusClient(config.CHAINSTACK_RPC_URL,
+        self._client = VenusClient(config.CHAINSTACK_RPC_URL_GITHUB,
                                    config.VENUS_CORE_COMPTROLLER_ADDR,
                                    private_key,
                                    bloxroute_api_key,
@@ -56,10 +56,7 @@ class MonitorUserEvent:
                 continue
 
             prices = await self._client.get_oracle_price(list(user_profile.keys()))
-            for v_addr, price in prices.items():
-                token = self._vtoken_cache[v_addr]
-                decimal = int(token['underlying_decimal'])
-                prices[v_addr] = price // (10 ** (18 - decimal))
+
             hf = self.analyzer.calculate_hf(user_profile, prices)
             if hf <= 1.3:
                 await self._db.save_or_update_user_health_factor({user_address: hf})

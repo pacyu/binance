@@ -25,6 +25,7 @@ class Run:
         calls_v = []
         for addr in all_markets:
             calls_v.append(Call(addr, ['symbol()(string)'], [(f"v_sym_{addr}", lambda x: x)]))
+            calls_v.append(Call(addr, ['decimals()(uint8)'], [(f"dec_{addr}", lambda x: x)]))
             # 查询 Comptroller 获取抵押因子: markets(address) -> (isListed, collatFactor, isVenus...)
             calls_v.append(
                 Call(comptroller_addr, ['markets(address)((bool,uint256,bool))', addr],
@@ -42,31 +43,33 @@ class Run:
         for v_addr in all_markets:
             u_addr = res_v.get(f"und_addr_{v_addr}")
             v_sym = res_v.get(f"v_sym_{v_addr}")
+            decimal = res_v.get(f"dec_{v_addr}")
             market_info = res_v.get(f"market_{v_addr}")  # (isListed, cf, isComp)
 
             cf = market_info[1] / 1e18 if market_info else 0  # 转换为 0.x 格式
 
             if v_addr.lower() == config.BNB_ADDRESS:
-                vtoken_to_underlying[v_addr] = {"sym": "BNB", "dec": 18, "is_native": True, "v_sym": v_sym, "cf": cf}
+                vtoken_to_underlying[v_addr] = {"sym": "BNB", "decimal": 18, "is_native": True, "v_sym": v_sym, "cf": cf}
                 # calls_u.append(Call(v_addr, ['getCash()(uint256)'], [(f"cash_{v_addr}", lambda x: x)]))
             elif u_addr:
-                calls_u.append(Call(u_addr, ['decimals()(uint8)'], [(f"dec_{v_addr}", lambda x: x)]))
+                calls_u.append(Call(u_addr, ['decimals()(uint8)'], [(f"under_dec_{v_addr}", lambda x: x)]))
                 calls_u.append(Call(u_addr, ['symbol()(string)'], [(f"sym_{v_addr}", lambda x: x)]))
                 # calls_u.append(Call(v_addr, ['getCash()(uint256)'], [(f"cash_{v_addr}", lambda x: x)]))
-                vtoken_to_underlying[v_addr] = {"u_addr": u_addr, "is_native": False, "v_sym": v_sym, "cf": cf}
+                vtoken_to_underlying[v_addr] = {"u_addr": u_addr, "decimal": decimal, "is_native": False, "v_sym": v_sym, "cf": cf}
 
         res_u = await Multicall(calls_u, _w3=self._client.get_w3()).coroutine()
 
         # 4. 构建 JSON
         for v_addr, info in vtoken_to_underlying.items():
             u_sym = res_u.get(f"sym_{v_addr}", "BNB") if not info['is_native'] else "BNB"
-            u_dec = res_u.get(f"dec_{v_addr}", 18) if not info['is_native'] else 18
+            u_dec = res_u.get(f"under_dec_{v_addr}", 18) if not info['is_native'] else 18
 
             token_dict = {
                 "symbol": u_sym.lower(),
                 "v_symbol": info['v_sym'],
                 "underlying_address": (config.WBNB_UNDER_ADDRESS if info['is_native'] else info["u_addr"].lower()),
                 "address": v_addr.lower(),
+                "decimal": info['decimal'],
                 "underlying_decimal": u_dec,
                 "cf": info['cf'],  # 抵押因子
                 "is_native": str(info['is_native']).lower(),
