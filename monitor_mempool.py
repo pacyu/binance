@@ -113,7 +113,7 @@ class MonitorMemPool:
                     prices = parse_prices(report)
                     final_price = sorted(prices)[len(prices) // 2]
                     decimals = int(digest_config['decimals'])
-                    price = final_price * (10 ** (18 - decimals)) # 将价格放缩为18位精度（wei)
+                    price = final_price * (10 ** (36 - decimals))
 
                     symbol = digest_config['symbol']
                     vtoken_address = digest_config['v_address']
