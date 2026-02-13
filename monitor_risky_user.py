@@ -73,7 +73,7 @@ class MonitorRiskyUser:
     async def run(self):
         await self._load_cache_()
 
-        self.Log.info(f"轮询任务开始，该任务每分钟执行一次...")
+        self.Log.info(f"轮询任务开始，该任务每 5 秒执行一次...")
         start = time.time()
         await self.risky_user_check()
         self.Log.info(f"本次轮询任务完成! 用时 {int(time.time() - start)} 秒.")

@@ -67,7 +67,7 @@ class MonitorUsers:
     async def run(self):
         await self._load_cache_()
 
-        self.Log.info(f"全量扫描任务开始，该任务每小时执行一次...")
+        self.Log.info(f"全量扫描任务开始，该任务每 5 分钟执行一次...")
         start = time.time()
         await self.full_scan()
         self.Log.info(f"本次全量扫描完成! 用时 {int(time.time() - start)} 秒.")
