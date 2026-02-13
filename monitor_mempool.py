@@ -75,7 +75,7 @@ class MonitorMemPool:
     async def _check_opportunity(self, vtoken_addr, prices, oracle_tx_hash: str = None):
         user_address_list = list(await self._db.get_holder_by_currency(vtoken_addr))
 
-        step = 80
+        step = 50
 
         tasks = [
             self.engine.handle_multi_liquidation(user_address_list[i: i + step], prices, oracle_tx_hash)
