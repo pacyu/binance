@@ -34,7 +34,6 @@ class MonitorMemPool:
         self.engine = Liquidator(self._client, self._db, self.analyzer, self.Log)
 
         self._task_queue = asyncio.Queue(maxsize=1000)
-        self._semaphore = asyncio.Semaphore(500)
 
         self._prior_counter = 0
 
@@ -73,24 +72,9 @@ class MonitorMemPool:
         tx_hash = task["tx_hash"]
         await self._process_transaction(tx_hash)
 
-    async def _process_user(self, u_addr, prices, oracle_tx_hash: str = None):
-        async with self._semaphore:
-            risky_report = await self.analyzer.analyze_user(u_addr, prices)
-            if risky_report['is_liquidatable']:
-                self.Log.info(f"⚠️ 用户 {u_addr} 资产进入警戒线，立即触发清算!")
-                await self.engine.handle_liquidation(risky_report, prices, oracle_tx_hash)
-
     async def _check_opportunity(self, vtoken_addr, prices, oracle_tx_hash: str = None):
         user_address_list = list(await self._db.get_holder_by_currency(vtoken_addr))
-
-        if not user_address_list:
-            return
-
-        tasks = [
-            self._process_user(addr, prices, oracle_tx_hash)
-            for addr in user_address_list
-        ]
-        await asyncio.gather(*tasks)
+        await self.engine.handle_multi_liquidation(user_address_list, prices, oracle_tx_hash)
 
     async def _process_transaction(self, tx_hash):
         try:

@@ -43,7 +43,7 @@ class Liquidator:
         else:
             self.Log.info(f"用户: {user_address} 不值得清算! | 账户流动性:{liquidity} | 账户缺口: {shortfall}")
 
-    async def handle_multi_liquidation(self, user_address_list, prices):
+    async def handle_multi_liquidation(self, user_address_list: list, prices: dict, oracle_tx_hash: str = None):
         risky_reports = await self.analyzer.analyze_users(user_address_list, prices)
         assets = await self._client.get_user_liquidity(user_address_list)
         tasks = []
@@ -54,7 +54,7 @@ class Liquidator:
             error, liquidity, shortfall = assets[user_address]
 
             if hf < 1.01 and shortfall > config.SHORTFALL_THRESHOLD:
-                tasks.append(self._handle_helper(user_address, user_profile, assets, prices, hf))
+                tasks.append(self._handle_helper(user_address, user_profile, assets, prices, hf, oracle_tx_hash))
         await asyncio.gather(*tasks)
 
     async def handle_liquidation(self, report, prices, oracle_tx_hash: str = None):
