@@ -1,4 +1,5 @@
 import os
+import time
 import config
 import asyncio
 from cmath import inf
@@ -18,7 +19,7 @@ class MonitorRiskyUser:
         bloxroute_auth_header = os.getenv('BLOXROUTE_AUTH_HEADER')
 
         self._db = RedisClient()
-        self._client = VenusClient(config.CHAINSTACK_RPC_URL_GITHUB,
+        self._client = VenusClient(config.NODEREAL_RPC_URL_DISCORD,
                                    config.VENUS_CORE_COMPTROLLER_ADDR,
                                    private_key,
                                    bloxroute_api_key,
@@ -73,8 +74,9 @@ class MonitorRiskyUser:
         await self._load_cache_()
 
         self.Log.info(f"轮询任务开始，该任务每分钟执行一次...")
+        start = time.time()
         await self.risky_user_check()
-        self.Log.info(f"本次轮询任务完成!")
+        self.Log.info(f"本次轮询任务完成! 用时 {time.time() - start} 秒.")
 
     def __call__(self, *args, **kwargs):
         asyncio.run(self.run())

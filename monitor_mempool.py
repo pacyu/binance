@@ -24,7 +24,7 @@ class MonitorMemPool:
         bloxroute_auth_header = os.getenv('BLOXROUTE_AUTH_HEADER')
 
         self.Log = Logger('mempool.log')()
-        self._client = VenusClient(config.QUICKNODE_RPC_URL,
+        self._client = VenusClient(config.NODEREAL_RPC_URL_DISCORD,
                                    config.VENUS_CORE_COMPTROLLER_ADDR,
                                    private_key,
                                    bloxroute_api_key,
@@ -34,7 +34,7 @@ class MonitorMemPool:
         self.engine = Liquidator(self._client, self._db, self.analyzer, self.Log)
 
         self._task_queue = asyncio.Queue(maxsize=1000)
-        self._semaphore = asyncio.Semaphore(200)
+        self._semaphore = asyncio.Semaphore(500)
 
         self._prior_counter = 0
 

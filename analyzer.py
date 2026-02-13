@@ -56,6 +56,7 @@ class Analyzer:
         report = {
             "user_address": user_address,
             "health_factor": hf,
+            "user_profile": user_profile,
             "is_liquidatable": 0 < hf < 1.05,
         }
         return report
@@ -74,7 +75,7 @@ class Analyzer:
             else:
                 await self._db.remove_user_health_factor_by_wallet_address(user_address)
 
-            await self._db.update_user_profile(user_address, user_profile)
+            # await self._db.update_user_profile(user_address, user_profile)
 
             report = {
                 "user_address": user_address,

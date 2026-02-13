@@ -53,31 +53,23 @@ class Liquidator:
             user_profile = risky_report['user_profile']
             error, liquidity, shortfall = assets[user_address]
 
-            if shortfall > 0:
+            if hf < 1.02 or shortfall > 0:
                 tasks.append(self._handle_helper(user_address, user_profile, assets, prices, hf))
         await asyncio.gather(*tasks)
 
     async def handle_liquidation(self, report, prices, oracle_tx_hash: str = None):
         user_address = report['user_address']
+        user_profile = report['user_profile']
+        hf = report['health_factor']
 
         if await self._db.should_skip(user_address):
             return
 
-        user_profile = await self.analyzer.get_user_snapshot([user_address])
-
-        if not user_profile:
-            return
-
-        if not user_profile[user_address]:
-            await self._db.remove_user_profile(f"user_profile:{user_address}")
-            return
-
-        hf = self.analyzer.calculate_hf(user_profile[user_address], prices)
         assets = await self._client.get_user_liquidity([user_address])
         error, liquidity, shortfall = assets[user_address]
 
-        if shortfall > 0:
-            await self._handle_helper(user_address, user_profile[user_address], assets, prices, hf, oracle_tx_hash)
+        if hf < 1.02 or shortfall > 0:
+            await self._handle_helper(user_address, user_profile, assets, prices, hf, oracle_tx_hash)
 
     async def get_slippage(self, pair_addr, v_address, amount):
         reserves, token0, token1 = await self._client.get_reserves(pair_addr)

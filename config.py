@@ -16,6 +16,8 @@ ANKR_RPC_URL_GOOGLE = "https://rpc.ankr.com/bsc/e1742d0ef375c7aaea14e37dc62551a3
 ANKR_RPC_URL_MICROSOFT = "https://rpc.ankr.com/bsc/7dd405f2eb3ccaf5b967ec8a17d4ad63788c3df585850106619fbb187323bf55"
 NODEREAL_RPC_URL = "https://bsc-mainnet.nodereal.io/v1/0d1c1bcb6f8440eb8f159ff5837c819c"
 NODEREAL_WSS_URI = "wss://bsc-mainnet.nodereal.io/ws/v1/0d1c1bcb6f8440eb8f159ff5837c819c"
+NODEREAL_RPC_URL_DISCORD = "https://bsc-mainnet.nodereal.io/v1/80751d6f6462488fbc4aa3762469d760"
+NODEREAL_WSS_URI_DISCORD = "wss://bsc-mainnet.nodereal.io/ws/v1/80751d6f6462488fbc4aa3762469d760"
 ALCHEMY_BSC_RPC_URL = "https://bnb-mainnet.g.alchemy.com/v2/FuLG4La49rlhyWgrZlSDI"
 ALCHEMY_BSC_WSS_URI = "wss://bnb-mainnet.g.alchemy.com/v2/FuLG4La49rlhyWgrZlSDI"
 

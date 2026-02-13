@@ -22,7 +22,7 @@ class MonitorUserEvent:
         bloxroute_auth_header = os.getenv('BLOXROUTE_AUTH_HEADER')
 
         self.Log = Logger('user_event.log')()
-        self._client = VenusClient(config.CHAINSTACK_RPC_URL_GITHUB,
+        self._client = VenusClient(config.NODEREAL_RPC_URL_DISCORD,
                                    config.VENUS_CORE_COMPTROLLER_ADDR,
                                    private_key,
                                    bloxroute_api_key,
