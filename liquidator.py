@@ -53,7 +53,7 @@ class Liquidator:
             user_profile = risky_report['user_profile']
             error, liquidity, shortfall = assets[user_address]
 
-            if hf < 1.02 or shortfall > config.SHORTFALL_THRESHOLD:
+            if hf < 1.01 and shortfall > config.SHORTFALL_THRESHOLD:
                 tasks.append(self._handle_helper(user_address, user_profile, assets, prices, hf))
         await asyncio.gather(*tasks)
 
@@ -68,7 +68,7 @@ class Liquidator:
         assets = await self._client.get_user_liquidity([user_address])
         error, liquidity, shortfall = assets[user_address]
 
-        if hf < 1.02 or shortfall > config.SHORTFALL_THRESHOLD:
+        if hf < 1.01 and shortfall > config.SHORTFALL_THRESHOLD:
             await self._handle_helper(user_address, user_profile, assets, prices, hf, oracle_tx_hash)
 
     async def get_slippage(self, pair_addr, v_address, amount):
