@@ -76,7 +76,7 @@ class MonitorRiskyUser:
         self.Log.info(f"轮询任务开始，该任务每分钟执行一次...")
         start = time.time()
         await self.risky_user_check()
-        self.Log.info(f"本次轮询任务完成! 用时 {time.time() - start} 秒.")
+        self.Log.info(f"本次轮询任务完成! 用时 {int(time.time() - start)} 秒.")
 
     def __call__(self, *args, **kwargs):
         asyncio.run(self.run())
