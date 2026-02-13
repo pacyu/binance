@@ -74,7 +74,7 @@ class MonitorMemPool:
 
     async def _check_opportunity(self, vtoken_addr, prices, oracle_tx_hash: str = None):
         user_address_list = list(await self._db.get_holder_by_currency(vtoken_addr))
-
+        self.Log.info(f"持有该币种的用户共有 {len(user_address_list)} 个.")
         step = 50
 
         tasks = [
