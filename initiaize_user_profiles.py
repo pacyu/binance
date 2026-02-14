@@ -32,7 +32,7 @@ class Run:
 
                 hf = self.analyzer.calculate_hf(user_profile, prices)
                 print(user_address, hf)
-                if hf <= 1.3:
+                if 0 < hf <= 1.3:
                     await self.redis.save_or_update_user_health_factor({user_address: hf})
                 else:
                     await self.redis.remove_user_health_factor_by_wallet_address(user_address)
