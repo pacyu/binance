@@ -128,7 +128,7 @@ class MonitorMemPool:
         while True:
             try:
                 async with websockets.connect(
-                        config.BSC_WSS_URI, ping_timeout=120, ping_interval=5, close_timeout=5) as ws:
+                        config.BSC_WSS_URI, ping_timeout=600, ping_interval=5, close_timeout=5) as ws:
                     await ws.send(json.dumps(subscribe_msg))
                     msg = json.loads(await ws.recv())
                     self.Log.info(f"成功订阅 Mempool - newPendingTransactions, SubID: {msg["result"]}")

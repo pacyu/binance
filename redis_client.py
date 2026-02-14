@@ -228,3 +228,6 @@ class RedisClient:
     async def get_binance_prices(self):
         name = f"binance:price"
         return await self._db.hgetall(name)
+
+    def scan_iter(self, match: str = None, count: int = 100):
+        return self._db.scan_iter(match=match, count=count)

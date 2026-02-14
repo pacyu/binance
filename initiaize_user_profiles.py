@@ -1,7 +1,7 @@
 import config
 import asyncio
-from web3client import VenusClient
 from redis_client import RedisClient
+from web3client import VenusClient
 from analyzer import Analyzer
 
 
