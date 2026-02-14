@@ -329,7 +329,7 @@ class Liquidator:
             self.Log.info(f"----------------------")
 
         liquidation_report = {
-            "is_profitable": net_profit >= config.MIN_PROFIT_TOLERANCE,  # 利润大于 1 刀
+            "is_profitable": net_profit > config.MIN_PROFIT_TOLERANCE,  # 利润大于 1 刀
             "repay_amount": repay_amount_wei,
             "pair_address": pair_address,
             "best_debt": best_debt,
