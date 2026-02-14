@@ -285,7 +285,7 @@ class Liquidator:
         received_collateral_amount_wei = self.calc_received_collateral(
             repay_amount_wei, best_debt, best_collateral, prices, self.incentive_mantissa)
 
-        # 3. 计算还掉闪电贷的最优路径与债务 + 滑点 + swap手续费（0.25%）成本
+        # 3. 计算还闪电贷的最优路径与债务 + 滑点 + swap手续费（0.25%）成本
         best_path, pay_collateral_amount_wei = await self.calc_repay_flash_loan_best_path(
             pair_address,
             collateral_underlying_address,
