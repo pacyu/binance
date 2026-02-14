@@ -62,9 +62,6 @@ class Liquidator:
         user_profile = report['user_profile']
         hf = report['health_factor']
 
-        if await self._db.should_skip(user_address):
-            return
-
         assets = await self._client.get_user_liquidity([user_address])
         error, liquidity, shortfall = assets[user_address]
 
@@ -264,11 +261,12 @@ class Liquidator:
 
         debt_underlying_address = best_debt['underlying_address']
         collateral_underlying_address = best_collateral['underlying_address']
-
+        collateral_underlying_decimal = best_collateral['underlying_decimal']
         price_collateral = prices[best_collateral['v_addr']]
+
         min_profit_wei = usd_to_wei(config.MIN_PROFIT_TOLERANCE,
                                     price_collateral,
-                                    18)
+                                    collateral_underlying_decimal)
 
         if debt_underlying_address != config.WBNB_UNDER_ADDRESS:
             pair_address = self._pair_graph_[debt_underlying_address][config.WBNB_UNDER_ADDRESS]
