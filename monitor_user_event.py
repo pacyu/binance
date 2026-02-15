@@ -22,7 +22,7 @@ class MonitorUserEvent:
         bloxroute_auth_header = os.getenv('BLOXROUTE_AUTH_HEADER')
 
         self.Log = Logger('user_event.log')()
-        self._client = VenusClient(config.NODEREAL_RPC_URL_DISCORD,
+        self._client = VenusClient(config.ALCHEMY_BSC_RPC_URL,
                                    config.VENUS_CORE_COMPTROLLER_ADDR,
                                    private_key,
                                    bloxroute_api_key,
@@ -62,6 +62,9 @@ class MonitorUserEvent:
                 await self._db.save_or_update_user_health_factor({user_address: hf})
             else:
                 await self._db.remove_user_health_factor_by_wallet_address(user_address)
+
+            if not await self._db.exist_user_profile(user_address):
+                self.Log.info(f"该用户在画像数据库中不存在!")
 
             await self._db.update_user_profile(user_address, user_profile)
 

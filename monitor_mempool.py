@@ -24,7 +24,7 @@ class MonitorMemPool:
         bloxroute_auth_header = os.getenv('BLOXROUTE_AUTH_HEADER')
 
         self.Log = Logger('mempool.log')()
-        self._client = VenusClient(config.NODEREAL_RPC_URL_DISCORD,
+        self._client = VenusClient(config.CHAINSTACK_RPC_URL_GITHUB,
                                    config.VENUS_CORE_COMPTROLLER_ADDR,
                                    private_key,
                                    bloxroute_api_key,
@@ -114,7 +114,9 @@ class MonitorMemPool:
                     self._pre_onchain_price[vtoken_address] = price
                     deviation = 1 - last_price / price
                     self.Log.info(f"🔍 发现代币 {symbol} 价格即将更新! 价格变化: {last_price} -> {price} | 波动偏差: {deviation * 100:.6f}%")
+                    start = time.time()
                     await self._check_opportunity(vtoken_address, self._pre_onchain_price, tx_hash)
+                    self.Log.info(f"本次扫描共用时 {time.time() - start} 秒.")
         except TransactionNotFound:
             return
 
