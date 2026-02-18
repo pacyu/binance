@@ -55,7 +55,7 @@ class MonitorUsers:
 
         prices = await self._client.get_oracle_price(list(self._vtoken_cache.keys()))
 
-        batch_size = 100
+        batch_size = 50
 
         tasks = [
             self._process_users(user_address_list[i: i + batch_size], prices)
