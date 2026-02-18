@@ -64,7 +64,7 @@ class MonitorUserEvent:
                 await self._db.remove_user_health_factor_by_wallet_address(user_address)
 
             if not await self._db.exist_user_profile(user_address):
-                self.Log.info(f"该用户在画像数据库中不存在!")
+                self.Log.info(f"用户 {user_address} 在画像数据库中不存在!")
 
             await self._db.update_user_profile(user_address, user_profile)
 
