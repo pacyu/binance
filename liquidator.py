@@ -316,7 +316,7 @@ class Liquidator:
         self.Log.info(f"剩余抵押品数量: {rest_collateral_amount_wei}")
         # self.Log.info(f"将剩余抵押品换为 USDT 能得到的数量: {gross_profit_amount}")
 
-        if net_profit < config.MIN_PROFIT_TOLERANCE:
+        if net_profit <= config.MIN_PROFIT_TOLERANCE:
             await self._db.mark_as_non_liquidable(user_addr,
                                                   config.COOLDOWN_TTL_HOUR,
                                                   f"low_profit: {net_profit} USD")
