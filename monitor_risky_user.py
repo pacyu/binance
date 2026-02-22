@@ -19,7 +19,7 @@ class MonitorRiskyUser:
         bloxroute_auth_header = os.getenv('BLOXROUTE_AUTH_HEADER')
 
         self._db = RedisClient()
-        self._client = VenusClient(config.NODEREAL_RPC_URL_DISCORD,
+        self._client = VenusClient(config.CHAINSTACK_RPC_URL,
                                    config.VENUS_CORE_COMPTROLLER_ADDR,
                                    private_key,
                                    bloxroute_api_key,
