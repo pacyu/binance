@@ -116,7 +116,7 @@ class MonitorMemPool:
                     self.Log.info(f"🔍 发现代币 {symbol} 价格即将更新! 价格变化: {last_price} -> {price} | 波动偏差: {deviation * 100:.6f}%")
                     start = time.time()
                     await self._check_opportunity(vtoken_address, self._pre_onchain_price, tx_hash)
-                    self.Log.info(f"本次扫描共用时 {time.time() - start} 秒.")
+                    self.Log.info(f"本次扫描共用时 {(time.time() - start):.2f} 秒.")
         except TransactionNotFound:
             return
 
