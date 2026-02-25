@@ -1,4 +1,5 @@
 __pycache__/*
+config.py
 logs/*
 test*.py
 .env
