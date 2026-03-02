@@ -65,10 +65,10 @@
 ### 环境变量配置 (.env)
 ```env
 PRIVATE_KEY=your_private_key
-NODEREAL_RPC_URL=your_nodereal_url
+NODEREAL_RPC_API_KEY=your_nodereal_api_key
 BLOXROUTE_API_KEY=your_api_key
 BLOXROUTE_AUTH_HEADER=your_auth_header
-REDIS_HOST=127.0.0.1
+CONTRACT_ADDRESS=your_contract_address
 ```
 
 ### 1. 启动本地缓存更新与监控
