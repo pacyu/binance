@@ -20,9 +20,10 @@ class MonitorUserEvent:
         private_key = os.getenv('PRIVATE_KEY')
         bloxroute_api_key = os.getenv('BLOXROUTE_API_KEY')
         bloxroute_auth_header = os.getenv('BLOXROUTE_AUTH_HEADER')
+        alchemy_rpc_api_key = os.getenv('ALCHEMY_RPC_API_KEY')
 
         self.Log = Logger('user_event.log')()
-        self._client = VenusClient(config.ALCHEMY_BSC_RPC_URL,
+        self._client = VenusClient(config.ALCHEMY_RPC_URL % alchemy_rpc_api_key,
                                    config.VENUS_CORE_COMPTROLLER_ADDR,
                                    private_key,
                                    bloxroute_api_key,

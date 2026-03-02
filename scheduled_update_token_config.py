@@ -1,3 +1,4 @@
+import os
 import config
 import asyncio
 from redis_client import RedisClient
@@ -8,8 +9,9 @@ from utils import get_binance_symbols
 
 class Run:
     def __init__(self):
+        alchemy_rpc_api_key = os.getenv('ALCHEMY_RPC_API_KEY')
         self._db = RedisClient()
-        self._client = VenusClient(config.ALCHEMY_BSC_RPC_URL, config.VENUS_CORE_COMPTROLLER_ADDR)
+        self._client = VenusClient(config.ALCHEMY_RPC_URL % alchemy_rpc_api_key, config.VENUS_CORE_COMPTROLLER_ADDR)
 
     async def update_token_config(self):
         symbols = get_binance_symbols()

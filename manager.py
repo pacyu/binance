@@ -89,7 +89,8 @@ if __name__ == '__main__':
     from redis_client import RedisClient
     import asyncio
 
+    api_key = 'your_api_key'
     r = RedisClient()
-    client = VenusClient(config.ALCHEMY_BSC_RPC_URL, config.VENUS_CORE_COMPTROLLER_ADDR)
-    manager = DataManager(client, r)
+    v_client = VenusClient(config.ALCHEMY_RPC_URL % api_key, config.VENUS_CORE_COMPTROLLER_ADDR)
+    manager = DataManager(v_client, r)
     asyncio.run(manager.update_oracle_sources())

@@ -1,3 +1,4 @@
+import os
 import config
 import asyncio
 from redis_client import RedisClient
@@ -7,8 +8,9 @@ from analyzer import Analyzer
 
 class Run:
     def __init__(self):
+        alchemy_rpc_api_key = os.getenv('ALCHEMY_RPC_API_KEY')
         self.redis = RedisClient()
-        self.client = VenusClient(config.ALCHEMY_BSC_RPC_URL, config.VENUS_CORE_COMPTROLLER_ADDR)
+        self.client = VenusClient(config.ALCHEMY_RPC_URL % alchemy_rpc_api_key, config.VENUS_CORE_COMPTROLLER_ADDR)
         self.analyzer = Analyzer(self.client, self.redis)
 
     async def _load_cache_(self):

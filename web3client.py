@@ -22,7 +22,8 @@ class VenusClient:
                  comptroller_addr: str,
                  private_key: Optional[str] = None,
                  bloxroute_api_key: Optional[str] = None,
-                 bloxroute_auth_header: Optional[str] = None, ):
+                 bloxroute_auth_header: Optional[str] = None,
+                 contract_addr: Optional[str] = None):
 
         self._w3 = Web3(HTTPProvider(rpc_url))
         self._async_w3 = AsyncWeb3(AsyncHTTPProvider(rpc_url))
@@ -30,6 +31,7 @@ class VenusClient:
         self.private_key = private_key
         self.bloxroute_api_key = bloxroute_api_key
         self.bloxroute_auth_header = bloxroute_auth_header
+        self.CONTRACT_ADDR = contract_addr
 
         if private_key:
             key = private_key if private_key.startswith("0x") else "0x" + private_key
@@ -387,7 +389,7 @@ class VenusClient:
         if not self.private_key:
             raise ValueError("Private key is required for sending transactions.")
 
-        alpha_contract = self.get_contract(config.CONTRACT_ADDR, abi.contract_abi)
+        alpha_contract = self.get_contract(self.CONTRACT_ADDR, abi.contract_abi)
 
         nonce = self.get_transaction_count()
 
@@ -446,7 +448,7 @@ class VenusClient:
         if not self.private_key:
             raise ValueError("Private key is required for sending transactions.")
 
-        alpha_contract = self.get_contract(config.CONTRACT_ADDR, abi.contract_abi)
+        alpha_contract = self.get_contract(self.CONTRACT_ADDR, abi.contract_abi)
 
         params = (
             self.to_checksum_address(borrower),

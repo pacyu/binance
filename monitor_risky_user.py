@@ -17,13 +17,16 @@ class MonitorRiskyUser:
         private_key = os.getenv('PRIVATE_KEY')
         bloxroute_api_key = os.getenv('BLOXROUTE_API_KEY')
         bloxroute_auth_header = os.getenv('BLOXROUTE_AUTH_HEADER')
+        chain_stack_rpc_api_key = os.getenv('CHAINSTACK_RPC_API_KEY')
+        contract_addr = os.getenv('CONTRACT_ADDRESS')
 
         self._db = RedisClient()
-        self._client = VenusClient(config.CHAINSTACK_RPC_URL_GITHUB,
+        self._client = VenusClient(config.CHAINSTACK_RPC_URL % chain_stack_rpc_api_key,
                                    config.VENUS_CORE_COMPTROLLER_ADDR,
                                    private_key,
                                    bloxroute_api_key,
-                                   bloxroute_auth_header)
+                                   bloxroute_auth_header,
+                                   contract_addr)
         self.Log = Logger('risky_users.log')()
 
         self._vtoken_cache = {}
